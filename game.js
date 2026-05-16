@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 // ─── Fortnite POIs with images ────────────────────────────────────────────────
 // Images sourced from the Fortnite Fandom wiki (static.wikia.nocookie.net) and
@@ -327,6 +327,12 @@ const commands = [
   new SlashCommandBuilder()
     .setName('currentpoi')
     .setDescription('See the current hiding game status'),
+
+  new SlashCommandBuilder()
+    .setName('skipcooldown')
+    .setDescription("Skip a player's cooldown (Admin only)")
+    .addUserOption(o => o.setName('player').setDescription('The player whose cooldown to skip').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ];
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -431,6 +437,33 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
           ]
         });
       }
+    }
+
+    // /skipcooldown ────────────────────────────────────────────────────────────
+    if (commandName === 'skipcooldown') {
+      const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+      const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+
+      if (!isOwner && !isAdmin) {
+        return await safeReply(interaction, {
+          content: '❌ You do not have permission to use this command.',
+          ephemeral: true,
+        });
+      }
+
+      const target = interaction.options.getUser('player');
+
+      if (!userCooldowns.has(target.id)) {
+        return await safeReply(interaction, {
+          content: `ℹ️ **${target.username}** does not have an active cooldown.`,
+          ephemeral: true,
+        });
+      }
+
+      userCooldowns.delete(target.id);
+      return await safeReply(interaction, {
+        content: `✅ **${target.username}**'s cooldown has been removed — they can guess again!`,
+      });
     }
 
   } catch (err) {
