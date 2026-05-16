@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
+const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
@@ -235,6 +236,15 @@ try {
   log('INFO', 'Clan tables initialised successfully.');
 } catch (err) {
   log('ERROR', `Failed to initialise clan tables: ${err?.stack ?? err}`);
+  process.exit(1);
+}
+
+// ─── Lottery Table ────────────────────────────────────────────────────────────
+try {
+  initLotteryTable(db);
+  log('INFO', 'Lottery table initialised successfully.');
+} catch (err) {
+  log('ERROR', `Failed to initialise lottery table: ${err?.stack ?? err}`);
   process.exit(1);
 }
 
@@ -471,7 +481,7 @@ const commands = [
 ];
 
 // ─── Register Commands ─────────────────────────────────────────────────────────
-const allCommands = [...commands, ...gameCommands, ...clanCommands];
+const allCommands = [...commands, ...gameCommands, ...clanCommands, ...lotteryCommands];
 
 async function registerCommands() {
   try {
@@ -573,6 +583,11 @@ client.on('interactionCreate', async (interaction) => {
           logError('leaderboard post-win refresh', err)
         );
       });
+    }
+
+    // ── /spinwheel ────────────────────────────────────────────────────────────
+    if (commandName === 'spinwheel') {
+      return await handleLottery(interaction, db, client, updateBalance);
     }
 
     // ── /additem ──────────────────────────────────────────────────────────────
@@ -732,6 +747,13 @@ client.on('interactionCreate', async (interaction) => {
       } catch (err) {
         logError('buy DB transaction', err);
         return await safeReply(interaction, { content: '❌ Purchase failed due to a database error. No coins were deducted.', ephemeral: true });
+      }
+
+      // Add to lottery if buying "50 WIN LOTTERY"
+      if (itemName.toUpperCase() === '50 WIN LOTTERY') {
+        for (let i = 0; i < quantity; i++) {
+          addToLottery(db, user.id);
+        }
       }
 
       const newBalance = getBalance(user.id);
