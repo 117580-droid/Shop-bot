@@ -185,13 +185,14 @@ try {
 try {
   db.exec(`
     CREATE TABLE IF NOT EXISTS shop_items (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      name       TEXT    NOT NULL UNIQUE,
-      description TEXT   NOT NULL,
-      price      INTEGER NOT NULL,
-      stock      INTEGER NOT NULL DEFAULT -1,  -- -1 = unlimited
-      created_by TEXT    NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      name         TEXT    NOT NULL UNIQUE,
+      description  TEXT    NOT NULL,
+      price        INTEGER NOT NULL,
+      stock        INTEGER NOT NULL DEFAULT -1,  -- -1 = unlimited
+      created_by   TEXT    NOT NULL,
+      created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_protected INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS user_balances (
@@ -607,8 +608,8 @@ client.on('interactionCreate', async (interaction) => {
 
       try {
         db.prepare(`
-          INSERT INTO shop_items (name, description, price, stock, created_by)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO shop_items (name, description, price, stock, created_by, is_protected)
+          VALUES (?, ?, ?, ?, ?, 1)
         `).run(name, desc, price, stock, user.id);
       } catch (err) {
         logError('additem DB insert', err);
@@ -642,6 +643,10 @@ client.on('interactionCreate', async (interaction) => {
 
       if (!item) {
         return await safeReply(interaction, { content: `❌ No item found with name **${name}**.`, ephemeral: true });
+      }
+
+      if (item.is_protected === 1) {
+        return await safeReply(interaction, { content: '❌ This item is protected and cannot be deleted.', ephemeral: true });
       }
 
       try {
