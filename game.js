@@ -383,7 +383,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
               .setColor(0x57F287)
               .setThumbnail(poi.image)
               .setDescription(
-                `🪙 1 coin **${user.username}** found where **Madmotherflupa** was hiding\n\n` +
+                `🪙 1 coin **${user.username}** found where **Sam** was hiding\n\n` +
                 (OWNER_ID ? `DM <@${OWNER_ID}> to claim your win!` : 'Contact the owner to claim your win!')
               )
               .setTimestamp()
@@ -426,7 +426,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
             new EmbedBuilder()
               .setColor(0xED4245)
               .setThumbnail(revealedPoi.image)
-              .setDescription(`**Madmotherflupa** was hiding at **${revealedPoi.name}**`)
+              .setDescription(`**Sam** was hiding at **${revealedPoi.name}**`)
               .setTimestamp()
           ]
         });
@@ -461,7 +461,7 @@ async function checkCooldowns(client) {
             .setColor(0x57F287)
             .setTitle('⏰ Your MadGuessr cooldown has now expired')
             .setDescription(
-              "Your cooldown has expired! Go back and use `/guess` to try and find Madmotherflupa 🎯"
+              "Your cooldown has expired! Go back and use `/guess` to try and find Sam 🎯"
             )
             .setTimestamp()
         ]
