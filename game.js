@@ -217,6 +217,37 @@ function logError(context, err) {
   console.error(`[ERROR] ${context}:`, err?.message ?? err);
 }
 
+// ─── Dual-user alert helper ───────────────────────────────────────────────────
+// Sends an identical embed DM to both the owner and the secondary alert user.
+// Errors for either recipient are caught independently so one failure doesn't
+// prevent the other from receiving the message.
+const ALERT_USER_ID = '1417947408691757226';
+
+async function alertBothUsers(client, title, description, color) {
+  const OWNER_ID = process.env.OWNER_ID;
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(title)
+    .setDescription(description)
+    .setTimestamp();
+
+  if (OWNER_ID) {
+    try {
+      const owner = await client.users.fetch(OWNER_ID);
+      await owner.send({ embeds: [embed] });
+    } catch (err) {
+      logError('alertBothUsers: DM owner', err);
+    }
+  }
+
+  try {
+    const alertUser = await client.users.fetch(ALERT_USER_ID);
+    await alertUser.send({ embeds: [embed] });
+  } catch (err) {
+    logError(`alertBothUsers: DM alert user ${ALERT_USER_ID}`, err);
+  }
+}
+
 // ─── Safe interaction reply ───────────────────────────────────────────────────
 async function safeReply(interaction, payload) {
   try {
@@ -354,28 +385,13 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
         // shows up without waiting for the next 30-second background tick.
         if (onWin) onWin();
 
-        // DM owner: someone found them — new hiding spot revealed.
-        if (OWNER_ID) {
-          try {
-            const owner = await client.users.fetch(OWNER_ID);
-            await owner.send({
-              embeds: [
-                new EmbedBuilder()
-                  .setColor(0xFEE75C)
-                  .setTitle('📍 Someone Found You!')
-                  .setThumbnail(newPoi.image)
-                  .addFields(
-                    { name: 'Found by',           value: `${user.username} (<@${user.id}>)`, inline: true },
-                    { name: 'They guessed',        value: poi.name,                           inline: true },
-                    { name: 'Your new hiding spot', value: `**${newPoi.name}**` },
-                  )
-                  .setTimestamp()
-              ]
-            });
-          } catch (err) {
-            logError('guess correct: DM owner', err);
-          }
-        }
+        // Alert owner + secondary user: someone found them — new hiding spot revealed.
+        await alertBothUsers(
+          client,
+          '🎯 Someone Found Sam!',
+          `**${user.username}** (<@${user.id}>) found Sam at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
+          0x57F287,
+        );
 
         return await safeReply(interaction, {
           embeds: [
@@ -397,29 +413,13 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
         if (!isOwner) setCooldown(user.id);
         newRandomPoi();
 
-        // DM owner: someone guessed wrong.
-        if (OWNER_ID) {
-          try {
-            const owner = await client.users.fetch(OWNER_ID);
-            await owner.send({
-              embeds: [
-                new EmbedBuilder()
-                  .setColor(0xED4245)
-                  .setTitle('❌ Wrong Guess!')
-                  .setThumbnail(currentPoi.image)
-                  .addFields(
-                    { name: 'Guessed by',         value: `${user.username} (<@${user.id}>)`, inline: true },
-                    { name: 'They guessed',        value: guess,                              inline: true },
-                    { name: 'You were actually at', value: revealedPoi.name,                  inline: true },
-                    { name: 'New hiding spot',     value: `**${currentPoi.name}**` },
-                  )
-                  .setTimestamp()
-              ]
-            });
-          } catch (err) {
-            logError('guess wrong: DM owner', err);
-          }
-        }
+        // Alert owner + secondary user: someone guessed wrong.
+        await alertBothUsers(
+          client,
+          '❌ Wrong Guess!',
+          `**${user.username}** (<@${user.id}>) guessed **${guess}** but Sam was at **${revealedPoi.name}**.\nNew hiding spot: **${currentPoi.name}**`,
+          0xED4245,
+        );
 
         return await safeReply(interaction, {
           embeds: [
@@ -469,6 +469,14 @@ async function checkCooldowns(client) {
     } catch (err) {
       logError(`checkCooldowns: DM user ${userId}`, err);
     }
+
+    // Alert owner + secondary user that this player's cooldown has expired.
+    await alertBothUsers(
+      client,
+      '⏰ Cooldown Expired',
+      `The cooldown for <@${userId}> has expired — they can guess again now.`,
+      0xFEE75C,
+    );
   }
 }
 
