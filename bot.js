@@ -157,7 +157,7 @@ async function processModerationSchedule(clientRef) {
 }
 
 // ─── Database Setup ───────────────────────────────────────────────────────────
-const db = new Database('/data/shop.db');
+const db = new Database('/app/data/shop.db');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS shop_items (
