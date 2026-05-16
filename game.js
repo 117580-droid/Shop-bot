@@ -167,6 +167,29 @@ async function handleGame(interaction, updateBalance, client) {
       const isValidPoi = FORTNITE_POIS.some(p => p.toLowerCase() === guess.toLowerCase());
       const hint = isValidPoi ? '' : '\n*(That POI might not exist — double check the name!)*';
 
+      // DM the owner about the wrong guess
+      try {
+        const OWNER_ID = process.env.OWNER_ID;
+        if (OWNER_ID) {
+          const owner = await client.users.fetch(OWNER_ID);
+          await owner.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('❌ Wrong Guess!')
+                .addFields(
+                  { name: 'Guessed by', value: `${user.username} (<@${user.id}>)`, inline: true },
+                  { name: 'They guessed', value: guess, inline: true },
+                  { name: 'Correct location', value: `**${poi}**` },
+                )
+                .setTimestamp()
+            ]
+          });
+        }
+      } catch (err) {
+        console.error('Could not DM owner:', err.message);
+      }
+
       return interaction.reply({
         content: `❌ Wrong! **Sam** is not at **${guess}**. You must wait **1 hour and 30 minutes** before guessing again!${hint}`,
         ephemeral: true,
@@ -176,4 +199,3 @@ async function handleGame(interaction, updateBalance, client) {
 }
 
 module.exports = { commands, handleGame, getCurrentPoi, initPoi };
-
