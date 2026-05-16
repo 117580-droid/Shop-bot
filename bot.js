@@ -1,5 +1,7 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 const Database = require('better-sqlite3');
+const fs = require('fs');
+const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
 
@@ -157,52 +159,84 @@ async function processModerationSchedule(clientRef) {
 }
 
 // ─── Database Setup ───────────────────────────────────────────────────────────
-const db = new Database('/data/shop.db');
+const DB_PATH = '/data/shop.db';
+const DB_DIR  = path.dirname(DB_PATH);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS shop_items (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    NOT NULL UNIQUE,
-    description TEXT   NOT NULL,
-    price      INTEGER NOT NULL,
-    stock      INTEGER NOT NULL DEFAULT -1,  -- -1 = unlimited
-    created_by TEXT    NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+// Ensure the data directory exists before opening the database. Without this
+// the process crashes immediately when the volume hasn't been initialised yet.
+try {
+  fs.mkdirSync(DB_DIR, { recursive: true });
+  log('INFO', `Database directory ensured: ${DB_DIR}`);
+} catch (err) {
+  log('ERROR', `Failed to create database directory ${DB_DIR}: ${err?.stack ?? err}`);
+  process.exit(1);
+}
 
-  CREATE TABLE IF NOT EXISTS user_balances (
-    user_id TEXT PRIMARY KEY,
-    balance INTEGER NOT NULL DEFAULT 0         -- Starting balance
-  );
+let db;
+try {
+  db = new Database(DB_PATH);
+  log('INFO', `Database opened: ${DB_PATH}`);
+} catch (err) {
+  log('ERROR', `Failed to open database at ${DB_PATH}: ${err?.stack ?? err}`);
+  process.exit(1);
+}
 
-  CREATE TABLE IF NOT EXISTS purchases (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id    TEXT    NOT NULL,
-    item_id    INTEGER NOT NULL,
-    quantity   INTEGER NOT NULL DEFAULT 1,
-    total_cost INTEGER NOT NULL,
-    bought_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shop_items (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT    NOT NULL UNIQUE,
+      description TEXT   NOT NULL,
+      price      INTEGER NOT NULL,
+      stock      INTEGER NOT NULL DEFAULT -1,  -- -1 = unlimited
+      created_by TEXT    NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
 
-  CREATE TABLE IF NOT EXISTS inventories (
-    user_id TEXT    NOT NULL,
-    item_id INTEGER NOT NULL,
-    quantity INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (user_id, item_id)
-  );
+    CREATE TABLE IF NOT EXISTS user_balances (
+      user_id TEXT PRIMARY KEY,
+      balance INTEGER NOT NULL DEFAULT 0         -- Starting balance
+    );
 
-  CREATE TABLE IF NOT EXISTS warnings (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id      TEXT    NOT NULL,
-    guild_id     TEXT    NOT NULL,
-    moderator_id TEXT    NOT NULL,
-    reason       TEXT    NOT NULL,
-    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+    CREATE TABLE IF NOT EXISTS purchases (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    TEXT    NOT NULL,
+      item_id    INTEGER NOT NULL,
+      quantity   INTEGER NOT NULL DEFAULT 1,
+      total_cost INTEGER NOT NULL,
+      bought_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS inventories (
+      user_id TEXT    NOT NULL,
+      item_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, item_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS warnings (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id      TEXT    NOT NULL,
+      guild_id     TEXT    NOT NULL,
+      moderator_id TEXT    NOT NULL,
+      reason       TEXT    NOT NULL,
+      created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  log('INFO', 'Database schema initialised successfully.');
+} catch (err) {
+  log('ERROR', `Failed to initialise database schema: ${err?.stack ?? err}`);
+  process.exit(1);
+}
 
 // ─── Clan Tables ──────────────────────────────────────────────────────────────
-initClanTables(db);
+try {
+  initClanTables(db);
+  log('INFO', 'Clan tables initialised successfully.');
+} catch (err) {
+  log('ERROR', `Failed to initialise clan tables: ${err?.stack ?? err}`);
+  process.exit(1);
+}
 
 // ─── Database Helpers ─────────────────────────────────────────────────────────
 function getBalance(userId) {
