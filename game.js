@@ -290,7 +290,7 @@ function formatMs(ms) {
 const commands = [
   new SlashCommandBuilder()
     .setName('guess')
-    .setDescription('Guess which Fortnite POI foxyboy3 is hiding at!')
+    .setDescription('Guess which Fortnite POI Sam is hiding at!')
     .addStringOption(o => o.setName('poi').setDescription('Your POI guess').setRequired(true)),
 
   new SlashCommandBuilder()
@@ -313,8 +313,8 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
         embeds: [
           new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle('🎮 Where is foxyboy3?')
-            .setDescription(`**foxyboy3** is hiding somewhere on the Fortnite map!\n\nUse \`/guess <poi>\` to find them and win **🪙 1 coin**!\n\n*There are **${FORTNITE_POIS.length}** possible POIs across all chapters.*`)
+            .setTitle('🎮 Where is Sam?')
+            .setDescription(`**Sam** is hiding somewhere on the Fortnite map!\n\nUse \`/guess <poi>\` to find them and win **🪙 1 coin**!\n\n*There are **${FORTNITE_POIS.length}** possible POIs across all chapters.*`)
             .setFooter({ text: 'Wrong guesses give you a 1hr 30min cooldown!' })
             .setTimestamp()
         ]
