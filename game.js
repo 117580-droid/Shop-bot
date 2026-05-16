@@ -84,7 +84,7 @@ function formatMs(ms) {
 const commands = [
   new SlashCommandBuilder()
     .setName('guess')
-    .setDescription('Guess which Fortnite POI foxyboy3 is hiding at!')
+    .setDescription('Guess which Fortnite POI Sam is hiding at!')
     .addStringOption(o => o.setName('poi').setDescription('Your POI guess').setRequired(true)),
 
   new SlashCommandBuilder()
@@ -102,8 +102,8 @@ async function handleGame(interaction, updateBalance, client) {
       embeds: [
         new EmbedBuilder()
           .setColor(0x5865F2)
-          .setTitle('🎮 Where is foxyboy3?')
-          .setDescription(`**foxyboy3** is hiding somewhere on the Fortnite map!\n\nUse \`/guess <poi>\` to find them and win **🪙 1 coin**!\n\n*There are **${FORTNITE_POIS.length}** possible POIs across all chapters.*`)
+          .setTitle('🎮 Where is Sam?')
+          .setDescription(`**Sam** is hiding somewhere on the Fortnite map!\n\nUse \`/guess <poi>\` to find them and win **🪙 1 coin**!\n\n*There are **${FORTNITE_POIS.length}** possible POIs across all chapters.*`)
           .setFooter({ text: 'Wrong guesses give you a 1hr 30min cooldown!' })
           .setTimestamp()
       ]
@@ -157,7 +157,7 @@ async function handleGame(interaction, updateBalance, client) {
           new EmbedBuilder()
             .setColor(0x57F287)
             .setTitle('🎉 Found Them!')
-            .setDescription(`**${user.username}** found where **foxyboy3** was hiding!\n\n📍 They were at **${poi}**!\n\n🪙 **${user.username}** has been awarded **1 coin**!\n\n*foxyboy3 has moved to a new location...*`)
+            .setDescription(`**${user.username}** found where **Sam** was hiding!\n\n📍 They were at **${poi}**!\n\n🪙 **${user.username}** has been awarded **1 coin**!\n\n*Sam has moved to a new location...*`)
             .setTimestamp()
         ]
       });
@@ -168,7 +168,7 @@ async function handleGame(interaction, updateBalance, client) {
       const hint = isValidPoi ? '' : '\n*(That POI might not exist — double check the name!)*';
 
       return interaction.reply({
-        content: `❌ Wrong! **foxyboy3** is not at **${guess}**. You must wait **1 hour and 30 minutes** before guessing again!${hint}`,
+        content: `❌ Wrong! **Sam** is not at **${guess}**. You must wait **1 hour and 30 minutes** before guessing again!${hint}`,
         ephemeral: true,
       });
     }
@@ -176,3 +176,4 @@ async function handleGame(interaction, updateBalance, client) {
 }
 
 module.exports = { commands, handleGame, getCurrentPoi, initPoi };
+
