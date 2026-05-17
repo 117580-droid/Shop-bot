@@ -5,7 +5,7 @@ const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
-const { checkMentions } = require('./antispam.js');
+const { checkMentions, unmuteUser } = require('./antispam.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
@@ -479,6 +479,17 @@ const commands = [
     )
     .addStringOption(o =>
       o.setName('reason').setDescription('Reason for the warning')
+    ),
+
+  new SlashCommandBuilder()
+    .setName('unmute')
+    .setDescription('Unmute a user (Owner/Admin only)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addUserOption(o =>
+      o.setName('user').setDescription('The user to unmute').setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName('reason').setDescription('Reason for unmuting (optional)')
     ),
 ];
 
@@ -1223,6 +1234,62 @@ client.on('interactionCreate', async (interaction) => {
         .setTimestamp();
 
       log('INFO', `${user.username} warned ${target.username} (${target.id}) in guild ${interaction.guild.id} — warning #${warningCount} — reason: ${reason}`);
+      return await safeReply(interaction, { embeds: [embed] });
+    }
+
+    // ── /unmute ───────────────────────────────────────────────────────────────
+    if (commandName === 'unmute') {
+      // Restrict to the bot owner and the protected user ID
+      const ALLOWED_UNMUTE_IDS = [OWNER_ID, '1417947408691757226'].filter(Boolean);
+      if (!ALLOWED_UNMUTE_IDS.includes(user.id)) {
+        return await safeReply(interaction, {
+          content: '❌ You do not have permission to use this command.',
+          ephemeral: true,
+        });
+      }
+
+      // Must be used inside a guild
+      if (!interaction.guild) {
+        return await safeReply(interaction, { content: '❌ This command can only be used inside a server.', ephemeral: true });
+      }
+
+      const target = interaction.options.getUser('user');
+      const reason = (interaction.options.getString('reason') ?? '').trim() || 'No reason provided';
+
+      if (!target) {
+        return await safeReply(interaction, { content: '❌ Could not resolve the target user.', ephemeral: true });
+      }
+
+      // Call the antispam unmuteUser to clear permission overwrites and reset state
+      await unmuteUser(interaction.guild, target.id);
+
+      // Send a DM to the unmuted user
+      try {
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('🔊 You Have Been Unmuted')
+          .setDescription(`You have been unmuted in **${interaction.guild.name}** and can now participate again.`)
+          .addFields({ name: 'Reason', value: reason })
+          .setFooter({ text: `Unmuted by ${user.username}` })
+          .setTimestamp();
+
+        await target.send({ embeds: [dmEmbed] });
+      } catch {
+        // User may have DMs disabled — not a fatal error
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('🔊 User Unmuted')
+        .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+        .addFields(
+          { name: 'User',   value: `${target} (${target.username})`, inline: true },
+          { name: 'Reason', value: reason },
+        )
+        .setFooter({ text: `Unmuted by ${user.username}` })
+        .setTimestamp();
+
+      log('INFO', `${user.username} unmuted ${target.username} (${target.id}) in guild ${interaction.guild.id} — reason: ${reason}`);
       return await safeReply(interaction, { embeds: [embed] });
     }
 
