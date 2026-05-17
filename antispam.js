@@ -211,9 +211,10 @@ async function checkMentions(message, client) {
     if (mutedUsers.has(authorId)) return;
 
     // ── Immediate maximum penalty for 6+ mentions in one message ─────────────
-    // If the author crammed more than 5 mentions into a single message, skip the
-    // normal escalation ladder and jump straight to the harshest mute (level 5,
-    // 300 minutes / 5 hours).
+    // If the author crammed more than 5 mentions into a single message, apply
+    // the harshest mute immediately (level 5, 300 minutes / 5 hours) with a
+    // public channel warning, then ALSO fall through to the normal escalating
+    // logic below so both penalties are applied.
     if (mentionCount > 5) {
       const maxLevel = 5;
       const maxDuration = MUTE_DURATIONS[maxLevel]; // 300 minutes
@@ -232,12 +233,14 @@ async function checkMentions(message, client) {
         }
       }
 
-      // Return early — do not apply the normal escalating logic on top of this.
-      return;
+      // Do NOT return — fall through to the normal escalating logic so the
+      // cumulative mute is also applied on top of the immediate max mute.
     }
 
     // ── Normal escalating mute logic ──────────────────────────────────────────
-    // Determine mute duration and warning level based on violation count (0-indexed)
+    // Determine mute duration and warning level based on violation count (0-indexed).
+    // This runs for every offence, including those that already triggered the
+    // immediate max mute above.
     const warningLevel = Math.min(newCount - 1, 5); // 1st mention → level 0, cap at 5
     const durationMinutes = warningLevel >= MUTE_DURATIONS.length
       ? MUTE_DURATIONS[MUTE_DURATIONS.length - 1]  // cap at 300 min
