@@ -195,20 +195,20 @@ async function checkMentions(message, client) {
     // Only act on guild messages from real users
     if (!message.guild || message.author?.bot) return;
 
-    // Check whether the protected user is mentioned in this message
-    const mentionsProtected = message.mentions.users.has(PROTECTED_USER_ID);
-    if (!mentionsProtected) return;
+    // Count how many times the protected user is mentioned in this message
+    const mentionCount = message.mentions.users.filter(u => u.id === PROTECTED_USER_ID).size;
+    if (mentionCount === 0) return;
 
     const authorId = message.author.id;
 
-    // Don't stack mutes — if the user is already muted, ignore further mentions
-    // until the mute expires and their count is reset.
-    if (mutedUsers.has(authorId)) return;
-
-    // Increment mention count for this author
+    // Increment mention count for this author by the number of mentions in this message
     const existing = mentionCounts.get(authorId) ?? { count: 0, lastMentionTime: 0 };
-    const newCount = existing.count + 1;
+    const newCount = existing.count + mentionCount;
     mentionCounts.set(authorId, { count: newCount, lastMentionTime: Date.now() });
+
+    // Don't stack mutes — if the user is already muted, count the mention but
+    // don't apply another mute until the current one expires and count resets.
+    if (mutedUsers.has(authorId)) return;
 
     // Determine mute duration and warning level based on violation count (0-indexed)
     const warningLevel = Math.min(newCount - 1, 5); // 1st mention → level 0, cap at 5
