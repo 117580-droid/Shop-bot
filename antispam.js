@@ -11,8 +11,9 @@ const PROTECTED_USER_ID = '1417947408691757226';
 
 // Escalating mute durations in minutes:
 // 1st offence → 10 min, 2nd → 20 min, 3rd → 30 min,
-// 4th → 40 min, 5th → 50 min, 6th+ → 300 min (5 hours)
-const MUTE_DURATIONS = [10, 20, 30, 40, 50, 300];
+// 4th → 40 min, 5th → 50 min, 6th → 300 min (5 hours),
+// 7th+ → 1440 min (1 day ban)
+const MUTE_DURATIONS = [10, 20, 30, 40, 50, 300, 1440];
 
 // ─── Embed colours per violation level ───────────────────────────────────────
 // Transitions from green → yellow → orange → red as violations escalate.
@@ -23,6 +24,7 @@ const WARNING_COLORS = [
   0xE74C3C, // Level 3 — red
   0xC0392B, // Level 4 — dark red
   0x7B241C, // Level 5 — very dark red
+  0x2C3E50, // Level 6 — near black (1-day ban)
 ];
 
 // ─── Warning messages (0-indexed, one per violation level) ───────────────────
@@ -45,6 +47,9 @@ const WARNING_MESSAGES = [
 
   // Level 5 — harshest sixth warning
   'Permanent action will be taken if this behaviour continues. You have exhausted every warning. Your account is flagged for administrator review and any further harassment of Sam will result in an immediate and permanent ban.',
+
+  // Level 6 — 1-day ban
+  'You have been banned from this server for 1 day. Every warning was ignored and you continued to harass Sam without remorse. This is a formal 24-hour ban. If this behaviour continues upon your return, a permanent ban will be issued with no further warnings.',
 ];
 
 // Tracks per-user mention counts.
@@ -99,7 +104,7 @@ function log(level, message) {
  */
 async function muteUser(guild, userId, durationMinutes, warningLevel, client) {
   // Clamp warningLevel to valid range
-  const level = Math.max(0, Math.min(5, warningLevel));
+  const level = Math.max(0, Math.min(6, warningLevel));
 
   if (!muteExecutor) {
     log('WARN', `muteUser(${userId}): mute executor not yet registered — skipping mute.`);
@@ -112,7 +117,7 @@ async function muteUser(guild, userId, durationMinutes, warningLevel, client) {
 
     if (success) {
       mutedUsers.add(userId);
-      log('INFO', `Muted user ${userId} in guild ${guild.id} for ${durationMinutes} minute(s) (warning level ${level + 1}/6).`);
+      log('INFO', `Muted user ${userId} in guild ${guild.id} for ${durationMinutes} minute(s) (warning level ${level + 1}/7).`);
     } else {
       log('WARN', `muteUser(${userId}): executor reported failure for guild ${guild.id} — timeout not applied, but warnings will still be sent.`);
     }
@@ -150,13 +155,13 @@ async function sendWarningDM(client, userId, level, durationMinutes, timeoutAppl
 
     const embed = new EmbedBuilder()
       .setColor(WARNING_COLORS[level])
-      .setTitle(`⚠️ Warning ${level + 1}/6`)
+      .setTitle(`⚠️ Warning ${level + 1}/7`)
       .setDescription(WARNING_MESSAGES[level])
       .setFooter({ text: footerText })
       .setTimestamp();
 
     await user.send({ embeds: [embed] });
-    log('INFO', `Sent warning DM to ${userId} (level ${level + 1}/6, timeout applied: ${timeoutApplied}).`);
+    log('INFO', `Sent warning DM to ${userId} (level ${level + 1}/7, timeout applied: ${timeoutApplied}).`);
   } catch {
     // DM failure (user has DMs disabled, etc.) must not interrupt the flow
     log('WARN', `Could not send warning DM to ${userId} — DMs may be disabled.`);
@@ -224,15 +229,15 @@ async function checkMentions(message, client) {
 
     // ── Immediate maximum penalty for 6+ mentions in one message ─────────────
     // If the author crammed more than 5 mentions into a single message, apply
-    // the harshest mute immediately (level 5, 300 minutes / 5 hours) with a
-    // public channel warning, then return — the cumulative path below is not
+    // the harshest penalty immediately (level 6, 1440 minutes / 1 day ban) with
+    // a public channel warning, then return — the cumulative path below is not
     // needed because the maximum penalty has already been applied.
     if (mentionCount > 5) {
-      const maxLevel = 5;
-      const maxDuration = MUTE_DURATIONS[maxLevel]; // 300 minutes
+      const maxLevel = 6;
+      const maxDuration = MUTE_DURATIONS[maxLevel]; // 1440 minutes (1 day)
 
       log('INFO', `User ${authorId} mentioned protected user ${mentionCount} times in one message — applying immediate max mute.`);
-      log('INFO', `checkMentions: calling muteUser() for ${authorId} — immediate max mute (level ${maxLevel + 1}/6, ${maxDuration}m).`);
+      log('INFO', `checkMentions: calling muteUser() for ${authorId} — immediate max mute (level ${maxLevel + 1}/7, ${maxDuration}m).`);
 
       const success = await muteUser(message.guild, authorId, maxDuration, maxLevel, client);
 
@@ -241,8 +246,8 @@ async function checkMentions(message, client) {
       // Always send the channel warning, regardless of whether the timeout succeeded
       try {
         const channelMsg = success
-          ? `⛔ **${message.author.username}** has been muted for 5 hours for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message. (Warning 6/6)`
-          : `⛔ **${message.author.username}** triggered an automatic mute for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message, but the mute could not be applied — the bot is missing the **Moderate Members** permission. (Warning 6/6)`;
+          ? `⛔ **${message.author.username}** has been banned for 1 day for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message. (Warning 7/7)`
+          : `⛔ **${message.author.username}** triggered an automatic ban for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message, but the ban could not be applied — the bot is missing the **Moderate Members** permission. (Warning 7/7)`;
         await message.channel.send(channelMsg);
       } catch (err) {
         log('WARN', `checkMentions: could not send warning message in channel ${message.channel.id}: ${err?.message ?? err}`);
@@ -257,27 +262,27 @@ async function checkMentions(message, client) {
     }
 
     // ── Normal escalating mute logic ──────────────────────────────────────────
-    // Only mute once the author's cumulative mention count reaches 6 or more.
+    // Only mute once the author's cumulative mention count reaches 1 or more.
     // Below that threshold we track the count silently and wait.
-    if (newCount < 6) {
+    if (newCount < 1) {
       log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — below threshold, no mute yet.`);
       return;
     }
 
     // Determine mute duration and warning level based on cumulative count (0-indexed).
-    const warningLevel = Math.min(newCount - 1, 5); // 6th mention → level 5, cap at 5
+    const warningLevel = Math.min(newCount - 1, 6); // 7th mention → level 6, cap at 6
     const durationMinutes = warningLevel >= MUTE_DURATIONS.length
-      ? MUTE_DURATIONS[MUTE_DURATIONS.length - 1]  // cap at 300 min
+      ? MUTE_DURATIONS[MUTE_DURATIONS.length - 1]  // cap at 1440 min
       : MUTE_DURATIONS[warningLevel];
 
-    const warningDisplay = Math.min(newCount, 6); // display cap at 6
+    const warningDisplay = Math.min(newCount, 7); // display cap at 7
 
     // Format duration for the public channel message
     const durationText = durationMinutes >= 60
       ? `${durationMinutes / 60} hour${durationMinutes / 60 !== 1 ? 's' : ''}`
       : `${durationMinutes} minute${durationMinutes !== 1 ? 's' : ''}`;
 
-    log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — calling muteUser() (level ${warningLevel + 1}/6, ${durationMinutes}m).`);
+    log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — calling muteUser() (level ${warningLevel + 1}/7, ${durationMinutes}m).`);
     log('INFO', `checkMentions: muteExecutor registered = ${muteExecutor !== null}.`);
 
     // Apply the mute
@@ -288,8 +293,8 @@ async function checkMentions(message, client) {
     // Always send the channel warning, regardless of whether the timeout succeeded
     try {
       const channelMsg = success
-        ? `⚠️ **${message.author.username}** has been muted for ${durationText} for spamming mentions of <@${PROTECTED_USER_ID}>. (Warning ${warningDisplay}/6)`
-        : `⚠️ **${message.author.username}** triggered an automatic mute for spamming mentions of <@${PROTECTED_USER_ID}>, but the mute could not be applied — the bot is missing the **Moderate Members** permission. (Warning ${warningDisplay}/6)`;
+        ? `⚠️ **${message.author.username}** has been muted for ${durationText} for spamming mentions of <@${PROTECTED_USER_ID}>. (Warning ${warningDisplay}/7)`
+        : `⚠️ **${message.author.username}** triggered an automatic mute for spamming mentions of <@${PROTECTED_USER_ID}>, but the mute could not be applied — the bot is missing the **Moderate Members** permission. (Warning ${warningDisplay}/7)`;
       await message.channel.send(channelMsg);
     } catch (err) {
       log('WARN', `checkMentions: could not send warning message in channel ${message.channel.id}: ${err?.message ?? err}`);
