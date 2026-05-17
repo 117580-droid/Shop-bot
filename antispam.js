@@ -210,6 +210,33 @@ async function checkMentions(message, client) {
     // don't apply another mute until the current one expires and count resets.
     if (mutedUsers.has(authorId)) return;
 
+    // ── Immediate maximum penalty for 6+ mentions in one message ─────────────
+    // If the author crammed more than 5 mentions into a single message, skip the
+    // normal escalation ladder and jump straight to the harshest mute (level 5,
+    // 300 minutes / 5 hours).
+    if (mentionCount > 5) {
+      const maxLevel = 5;
+      const maxDuration = MUTE_DURATIONS[maxLevel]; // 300 minutes
+
+      log('INFO', `User ${authorId} mentioned protected user ${mentionCount} times in one message — applying immediate max mute.`);
+
+      const success = await muteUser(message.guild, authorId, maxDuration, maxLevel, client);
+
+      if (success) {
+        try {
+          await message.channel.send(
+            `⛔ **${message.author.username}** has been muted for 5 hours for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message. (Warning 6/6)`
+          );
+        } catch (err) {
+          log('WARN', `checkMentions: could not send warning message in channel ${message.channel.id}: ${err?.message ?? err}`);
+        }
+      }
+
+      // Return early — do not apply the normal escalating logic on top of this.
+      return;
+    }
+
+    // ── Normal escalating mute logic ──────────────────────────────────────────
     // Determine mute duration and warning level based on violation count (0-indexed)
     const warningLevel = Math.min(newCount - 1, 5); // 1st mention → level 0, cap at 5
     const durationMinutes = warningLevel >= MUTE_DURATIONS.length
