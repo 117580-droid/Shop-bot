@@ -201,19 +201,15 @@ async function checkMentions(message, client) {
 
     const authorId = message.author.id;
 
-    // Increment mention count for this author by the number of mentions in this message
-    const existing = mentionCounts.get(authorId) ?? { count: 0, lastMentionTime: 0 };
-    const newCount = existing.count + mentionCount;
-    mentionCounts.set(authorId, { count: newCount, lastMentionTime: Date.now() });
-
     // Don't stack mutes — if the user is already muted, count the mention but
     // don't apply another mute until the current one expires and count resets.
     if (mutedUsers.has(authorId)) return;
 
     // ── Immediate maximum penalty for 6+ mentions in one message ─────────────
     // If the author crammed more than 5 mentions into a single message, skip the
-    // normal escalation ladder and jump straight to the harshest mute (level 5,
-    // 300 minutes / 5 hours).
+    // normal escalation ladder entirely and jump straight to the harshest mute
+    // (level 5, 300 minutes / 5 hours).  The cumulative count is NOT incremented
+    // so that the two systems remain mutually exclusive.
     if (mentionCount > 5) {
       const maxLevel = 5;
       const maxDuration = MUTE_DURATIONS[maxLevel]; // 300 minutes
@@ -232,11 +228,17 @@ async function checkMentions(message, client) {
         }
       }
 
-      // Return early — do not apply the normal escalating logic on top of this.
+      // Return early — do not touch the cumulative count or apply escalating logic.
       return;
     }
 
     // ── Normal escalating mute logic ──────────────────────────────────────────
+    // Only reached when this message contained 1–5 mentions.
+    // Increment the cumulative count and pick the appropriate mute tier.
+    const existing = mentionCounts.get(authorId) ?? { count: 0, lastMentionTime: 0 };
+    const newCount = existing.count + mentionCount;
+    mentionCounts.set(authorId, { count: newCount, lastMentionTime: Date.now() });
+
     // Determine mute duration and warning level based on violation count (0-indexed)
     const warningLevel = Math.min(newCount - 1, 5); // 1st mention → level 0, cap at 5
     const durationMinutes = warningLevel >= MUTE_DURATIONS.length
