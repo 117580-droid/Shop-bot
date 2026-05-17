@@ -213,8 +213,16 @@ async function checkMentions(message, client) {
 
     const authorId = message.author.id;
 
-    // Increment mention count for this author by the number of mentions in this message
+    // Increment mention count for this author by the number of mentions in this message.
+    // If 24 hours have elapsed since the last mention, reset the count first so
+    // users get a fresh slate each day.
     const existing = mentionCounts.get(authorId) ?? { count: 0, lastMentionTime: 0 };
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+    const elapsed = Date.now() - existing.lastMentionTime;
+    if (existing.count > 0 && elapsed > TWENTY_FOUR_HOURS_MS) {
+      log('INFO', `checkMentions: resetting mention count for ${authorId} — ${Math.floor(elapsed / 3600000)}h elapsed since last mention (24-hour reset).`);
+      existing.count = 0;
+    }
     const newCount = existing.count + mentionCount;
     mentionCounts.set(authorId, { count: newCount, lastMentionTime: Date.now() });
 
