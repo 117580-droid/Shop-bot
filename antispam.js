@@ -107,43 +107,59 @@ async function muteUser(guild, userId, durationMinutes, warningLevel, client) {
   }
 
   try {
-    // Delegate the actual channel-overwrite mute to the executor provided by bot.js
+    // Delegate the actual timeout mute to the executor provided by bot.js
     const success = await muteExecutor(guild, userId, durationMinutes, level, client);
 
-    if (!success) {
-      log('WARN', `muteUser(${userId}): executor reported failure for guild ${guild.id}.`);
-      return false;
+    if (success) {
+      mutedUsers.add(userId);
+      log('INFO', `Muted user ${userId} in guild ${guild.id} for ${durationMinutes} minute(s) (warning level ${level + 1}/6).`);
+    } else {
+      log('WARN', `muteUser(${userId}): executor reported failure for guild ${guild.id} — timeout not applied, but warnings will still be sent.`);
     }
 
-    mutedUsers.add(userId);
-    log('INFO', `Muted user ${userId} in guild ${guild.id} for ${durationMinutes} minute(s) (warning level ${level + 1}/6).`);
-
-    // ── Send DM warning ───────────────────────────────────────────────────────
-    try {
-      const durationText = durationMinutes >= 60
-        ? `${durationMinutes / 60} hour${durationMinutes / 60 !== 1 ? 's' : ''}`
-        : `${durationMinutes} minute${durationMinutes !== 1 ? 's' : ''}`;
-
-      const user = await client.users.fetch(userId);
-
-      const embed = new EmbedBuilder()
-        .setColor(WARNING_COLORS[level])
-        .setTitle(`⚠️ Warning ${level + 1}/6`)
-        .setDescription(WARNING_MESSAGES[level])
-        .setFooter({ text: `You have been muted for ${durationText}. Please respect all server members.` })
-        .setTimestamp();
-
-      await user.send({ embeds: [embed] });
-      log('INFO', `Sent warning DM to ${userId} (level ${level + 1}/6).`);
-    } catch {
-      // DM failure (user has DMs disabled, etc.) must not interrupt the mute
-      log('WARN', `Could not send warning DM to ${userId} — DMs may be disabled.`);
-    }
-
-    return true;
+    return success;
   } catch (err) {
     log('ERROR', `muteUser(${userId}): ${err?.message ?? err}`);
     return false;
+  }
+}
+
+// ─── sendWarningDM ────────────────────────────────────────────────────────────
+
+/**
+ * Send a DM warning embed to the offending user.  Called by checkMentions()
+ * regardless of whether the timeout succeeded, so the user is always informed.
+ *
+ * @param {import('discord.js').Client} client
+ * @param {string}  userId          - The ID of the user to DM.
+ * @param {number}  level           - 0-5 violation index.
+ * @param {number}  durationMinutes - Intended mute duration (shown in the DM).
+ * @param {boolean} timeoutApplied  - Whether the Discord timeout actually succeeded.
+ */
+async function sendWarningDM(client, userId, level, durationMinutes, timeoutApplied) {
+  try {
+    const durationText = durationMinutes >= 60
+      ? `${durationMinutes / 60} hour${durationMinutes / 60 !== 1 ? 's' : ''}`
+      : `${durationMinutes} minute${durationMinutes !== 1 ? 's' : ''}`;
+
+    const user = await client.users.fetch(userId);
+
+    const footerText = timeoutApplied
+      ? `You have been muted for ${durationText}. Please respect all server members.`
+      : `A mute of ${durationText} was attempted but could not be applied (bot is missing the Moderate Members permission). You are still being monitored and this violation has been recorded.`;
+
+    const embed = new EmbedBuilder()
+      .setColor(WARNING_COLORS[level])
+      .setTitle(`⚠️ Warning ${level + 1}/6`)
+      .setDescription(WARNING_MESSAGES[level])
+      .setFooter({ text: footerText })
+      .setTimestamp();
+
+    await user.send({ embeds: [embed] });
+    log('INFO', `Sent warning DM to ${userId} (level ${level + 1}/6, timeout applied: ${timeoutApplied}).`);
+  } catch {
+    // DM failure (user has DMs disabled, etc.) must not interrupt the flow
+    log('WARN', `Could not send warning DM to ${userId} — DMs may be disabled.`);
   }
 }
 
@@ -222,15 +238,18 @@ async function checkMentions(message, client) {
 
       log('INFO', `checkMentions: muteUser() for ${authorId} (immediate max) returned: ${success}.`);
 
-      if (success) {
-        try {
-          await message.channel.send(
-            `⛔ **${message.author.username}** has been muted for 5 hours for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message. (Warning 6/6)`
-          );
-        } catch (err) {
-          log('WARN', `checkMentions: could not send warning message in channel ${message.channel.id}: ${err?.message ?? err}`);
-        }
+      // Always send the channel warning, regardless of whether the timeout succeeded
+      try {
+        const channelMsg = success
+          ? `⛔ **${message.author.username}** has been muted for 5 hours for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message. (Warning 6/6)`
+          : `⛔ **${message.author.username}** triggered an automatic mute for including an excessive number of mentions of <@${PROTECTED_USER_ID}> in a single message, but the mute could not be applied — the bot is missing the **Moderate Members** permission. (Warning 6/6)`;
+        await message.channel.send(channelMsg);
+      } catch (err) {
+        log('WARN', `checkMentions: could not send warning message in channel ${message.channel.id}: ${err?.message ?? err}`);
       }
+
+      // Always send the DM warning, noting whether the timeout was actually applied
+      await sendWarningDM(client, authorId, maxLevel, maxDuration, success);
 
       // Return immediately — the maximum penalty has been applied; there is no
       // need to also run the cumulative escalating logic for this message.
@@ -261,20 +280,23 @@ async function checkMentions(message, client) {
     log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — calling muteUser() (level ${warningLevel + 1}/6, ${durationMinutes}m).`);
     log('INFO', `checkMentions: muteExecutor registered = ${muteExecutor !== null}.`);
 
-    // Apply the mute and send the DM warning
+    // Apply the mute
     const success = await muteUser(message.guild, authorId, durationMinutes, warningLevel, client);
 
     log('INFO', `checkMentions: muteUser() for ${authorId} (cumulative) returned: ${success}.`);
 
-    if (success) {
-      try {
-        await message.channel.send(
-          `⚠️ **${message.author.username}** has been muted for ${durationText} for spamming mentions of <@${PROTECTED_USER_ID}>. (Warning ${warningDisplay}/6)`
-        );
-      } catch (err) {
-        log('WARN', `checkMentions: could not send warning message in channel ${message.channel.id}: ${err?.message ?? err}`);
-      }
+    // Always send the channel warning, regardless of whether the timeout succeeded
+    try {
+      const channelMsg = success
+        ? `⚠️ **${message.author.username}** has been muted for ${durationText} for spamming mentions of <@${PROTECTED_USER_ID}>. (Warning ${warningDisplay}/6)`
+        : `⚠️ **${message.author.username}** triggered an automatic mute for spamming mentions of <@${PROTECTED_USER_ID}>, but the mute could not be applied — the bot is missing the **Moderate Members** permission. (Warning ${warningDisplay}/6)`;
+      await message.channel.send(channelMsg);
+    } catch (err) {
+      log('WARN', `checkMentions: could not send warning message in channel ${message.channel.id}: ${err?.message ?? err}`);
     }
+
+    // Always send the DM warning, noting whether the timeout was actually applied
+    await sendWarningDM(client, authorId, warningLevel, durationMinutes, success);
   } catch (err) {
     log('ERROR', `checkMentions: ${err?.message ?? err}`);
   }
