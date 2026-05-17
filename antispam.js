@@ -217,15 +217,18 @@ async function checkMentions(message, client) {
     // ── Immediate maximum penalty for 6+ mentions in one message ─────────────
     // If the author crammed more than 5 mentions into a single message, apply
     // the harshest mute immediately (level 5, 300 minutes / 5 hours) with a
-    // public channel warning, then ALSO fall through to the normal escalating
-    // logic below so both penalties are applied.
+    // public channel warning, then return — the cumulative path below is not
+    // needed because the maximum penalty has already been applied.
     if (mentionCount > 5) {
       const maxLevel = 5;
       const maxDuration = MUTE_DURATIONS[maxLevel]; // 300 minutes
 
       log('INFO', `User ${authorId} mentioned protected user ${mentionCount} times in one message — applying immediate max mute.`);
+      log('INFO', `checkMentions: calling muteUser() for ${authorId} — immediate max mute (level ${maxLevel + 1}/6, ${maxDuration}m).`);
 
       const success = await muteUser(message.guild, authorId, maxDuration, maxLevel, client);
+
+      log('INFO', `checkMentions: muteUser() for ${authorId} (immediate max) returned: ${success}.`);
 
       if (success) {
         try {
@@ -237,15 +240,21 @@ async function checkMentions(message, client) {
         }
       }
 
-      // Do NOT return — fall through to the normal escalating logic so the
-      // cumulative mute is also applied on top of the immediate max mute.
+      // Return immediately — the maximum penalty has been applied; there is no
+      // need to also run the cumulative escalating logic for this message.
+      return;
     }
 
     // ── Normal escalating mute logic ──────────────────────────────────────────
-    // Determine mute duration and warning level based on violation count (0-indexed).
-    // This runs for every offence, including those that already triggered the
-    // immediate max mute above.
-    const warningLevel = Math.min(newCount - 1, 5); // 1st mention → level 0, cap at 5
+    // Only mute once the author's cumulative mention count reaches 6 or more.
+    // Below that threshold we track the count silently and wait.
+    if (newCount < 6) {
+      log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — below threshold, no mute yet.`);
+      return;
+    }
+
+    // Determine mute duration and warning level based on cumulative count (0-indexed).
+    const warningLevel = Math.min(newCount - 1, 5); // 6th mention → level 5, cap at 5
     const durationMinutes = warningLevel >= MUTE_DURATIONS.length
       ? MUTE_DURATIONS[MUTE_DURATIONS.length - 1]  // cap at 300 min
       : MUTE_DURATIONS[warningLevel];
@@ -257,8 +266,13 @@ async function checkMentions(message, client) {
       ? `${durationMinutes / 60} hour${durationMinutes / 60 !== 1 ? 's' : ''}`
       : `${durationMinutes} minute${durationMinutes !== 1 ? 's' : ''}`;
 
+    log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — calling muteUser() (level ${warningLevel + 1}/6, ${durationMinutes}m).`);
+    log('INFO', `checkMentions: muteExecutor registered = ${muteExecutor !== null}.`);
+
     // Apply the mute and send the DM warning
     const success = await muteUser(message.guild, authorId, durationMinutes, warningLevel, client);
+
+    log('INFO', `checkMentions: muteUser() for ${authorId} (cumulative) returned: ${success}.`);
 
     if (success) {
       try {
