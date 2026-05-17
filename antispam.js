@@ -194,6 +194,11 @@ async function checkMentions(message, client) {
     // Only act on guild messages from real users
     if (!message.guild || message.author?.bot) return;
 
+    // NOTE: No owner exemption — the bot owner is subject to the same anti-spam
+    // rules as every other user.  If the owner mentions Sam 6+ times they will
+    // be muted just like anyone else.  The OWNER_ID constant is intentionally
+    // not referenced here.
+
     // Count how many times the protected user is mentioned in this message
     const mentionCount = message.mentions.users.filter(u => u.id === PROTECTED_USER_ID).size;
     if (mentionCount === 0) return;

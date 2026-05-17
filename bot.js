@@ -519,6 +519,10 @@ const client = new Client({
 // Called by antispam.js when cumulative mention spam is detected.
 // Performs the same channel-overwrite mute as the /mute command and schedules
 // an automatic unmute via the shared scheduledUnmutes map.
+//
+// NOTE: No owner exemption — OWNER_ID is deliberately not checked here.
+// The bot owner is subject to the same anti-spam rules as every other user
+// and can be muted by this executor just like anyone else.
 async function executeMute(guild, userId, durationMinutes, warningLevel, clientRef) {
   const durationMs = durationMinutes * 60 * 1000;
   const reason     = 'Spamming mentions of Sam';
