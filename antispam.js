@@ -269,21 +269,19 @@ async function checkMentions(message, client) {
     }
 
     // ── Normal escalating mute logic ──────────────────────────────────────────
-    // Only mute once the author's cumulative mention count reaches 6 or more.
-    // Below that threshold we track the count silently and wait.
-    if (newCount < 6) {
-      log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — below threshold, no mute yet.`);
+    // Only trigger a warning on every 6th cumulative mention (6, 12, 18, …).
+    // All other counts are tracked silently with no action.
+    if (newCount % 6 !== 0) {
+      log('INFO', `checkMentions: ${authorId} has ${newCount} cumulative mention(s) — not a 6th-mention boundary, no mute yet.`);
       return;
     }
 
     // Determine mute duration and warning level based on cumulative count (0-indexed).
-    // 6 mentions → level 0 (Warning 1/7), 7 → level 1 (Warning 2/7), …, 12+ → level 6 (Warning 7/7)
-    const warningLevel = Math.min(newCount - 6, 6); // 6th mention → level 0, cap at 6
-    const durationMinutes = warningLevel >= MUTE_DURATIONS.length
-      ? MUTE_DURATIONS[MUTE_DURATIONS.length - 1]  // cap at 1440 min
-      : MUTE_DURATIONS[warningLevel];
+    // mention 6 → level 0 (warning 1/7), mention 12 → level 1 (warning 2/7), …, mention 42 → level 6 (warning 7/7)
+    const warningLevel = Math.min((newCount / 6) - 1, 6);
+    const durationMinutes = MUTE_DURATIONS[warningLevel];
 
-    const warningDisplay = Math.min(newCount - 5, 7); // display: 6 mentions → 1/7, cap at 7
+    const warningDisplay = Math.min(newCount / 6, 7); // display cap at 7
 
     // Format duration for the public channel message
     const durationText = durationMinutes >= 60
