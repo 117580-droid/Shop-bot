@@ -5,6 +5,7 @@ const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
+const { checkMentions } = require('./antispam.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
@@ -1238,6 +1239,11 @@ client.on('interactionCreate', async (interaction) => {
 
 // ─── XP on message ────────────────────────────────────────────────────────────
 client.on('messageCreate', (message) => {
+  // Anti-spam: check for repeated mentions of the protected user first
+  checkMentions(message, client).catch(err =>
+    log('ERROR', `messageCreate anti-spam handler: ${err?.message ?? err}`)
+  );
+
   handleXp(message, db).catch(err =>
     log('ERROR', `messageCreate XP handler: ${err?.message ?? err}`)
   );
