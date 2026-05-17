@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
@@ -142,17 +142,8 @@ async function processModerationSchedule(clientRef) {
     try {
       const guild  = await clientRef.guilds.fetch(entry.guildId);
       const member = await guild.members.fetch(entry.userId);
-      // Restore Send Messages permission in every text channel where it was
-      // explicitly denied for this user.
-      const textChannels = guild.channels.cache.filter(
-        ch => ch.type === ChannelType.GuildText
-      );
-      await Promise.all(
-        textChannels.map(ch =>
-          ch.permissionOverwrites.edit(member, { SendMessages: null })
-            .catch(() => {}) // ignore channels where we lack permission
-        )
-      );
+      // Remove the native Discord timeout from this user.
+      await member.timeout(null, 'Temporary mute duration expired');
       log('INFO', `Auto-unmuted user ${entry.userId} in guild ${entry.guildId}.`);
     } catch (err) {
       logError(`processModerationSchedule: unmute [${key}]`, err);
@@ -517,8 +508,8 @@ const client = new Client({
 
 // ─── Anti-spam mute executor ──────────────────────────────────────────────────
 // Called by antispam.js when cumulative mention spam is detected.
-// Performs the same channel-overwrite mute as the /mute command and schedules
-// an automatic unmute via the shared scheduledUnmutes map.
+// Uses Discord's native timeout feature (the same approach as the /mute command)
+// and schedules an automatic unmute via the shared scheduledUnmutes map.
 //
 // NOTE: No owner exemption — OWNER_ID is deliberately not checked here.
 // The bot owner is subject to the same anti-spam rules as every other user
@@ -535,24 +526,10 @@ async function executeMute(guild, userId, durationMinutes, warningLevel, clientR
     return false;
   }
 
-  const textChannels = guild.channels.cache.filter(ch => ch.type === ChannelType.GuildText);
-
-  let mutedCount = 0;
-  await Promise.all(
-    textChannels.map(async ch => {
-      try {
-        await ch.permissionOverwrites.edit(targetMember, { SendMessages: false }, {
-          reason: `Anti-spam mute (warning ${warningLevel + 1}/6): ${reason}`,
-        });
-        mutedCount++;
-      } catch {
-        // Skip channels where the bot lacks Manage Channel permission
-      }
-    })
-  );
-
-  if (mutedCount === 0) {
-    log('WARN', `executeMute: could not apply overwrites for ${userId} in guild ${guild.id}`);
+  try {
+    await targetMember.timeout(durationMs, `Anti-spam mute (warning ${warningLevel + 1}/6): ${reason}`);
+  } catch (err) {
+    log('WARN', `executeMute: could not apply timeout for ${userId} in guild ${guild.id}: ${err?.message ?? err}`);
     return false;
   }
 
@@ -1089,28 +1066,13 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      // Deny SendMessages in every text channel for this member
-      const textChannels = interaction.guild.channels.cache.filter(
-        ch => ch.type === ChannelType.GuildText
-      );
-
-      let mutedCount = 0;
-      await Promise.all(
-        textChannels.map(async ch => {
-          try {
-            await ch.permissionOverwrites.edit(targetMember, {
-              SendMessages: false,
-            }, { reason: `Muted by ${user.username}: ${reason}` });
-            mutedCount++;
-          } catch {
-            // Skip channels where the bot lacks Manage Channel permission
-          }
-        })
-      );
-
-      if (mutedCount === 0) {
+      // Apply Discord's native timeout to the member
+      try {
+        await targetMember.timeout(durationMs, `Muted by ${user.username}: ${reason}`);
+      } catch (err) {
+        logError(`mute: member.timeout [target=${target.id}]`, err);
         return await safeReply(interaction, {
-          content: '❌ Failed to mute the user. Make sure I have the **Manage Channels** permission.',
+          content: `❌ Failed to mute **${target.username}**. Make sure I have the **Moderate Members** permission and that the user is below me in the role hierarchy.`,
           ephemeral: true,
         });
       }
