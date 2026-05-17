@@ -1,6 +1,8 @@
 // ─── Anti-Spam / Anti-Harassment Protection ───────────────────────────────────
 // Monitors all messages for repeated mentions of the protected user and
 // automatically mutes offenders with escalating durations and DM warnings.
+// Mutes are applied via a pluggable executor registered by bot.js so that the
+// anti-spam system uses the same /mute command logic as manual moderation.
 
 const { EmbedBuilder, ChannelType } = require('discord.js');
 
@@ -53,6 +55,22 @@ const mentionCounts = new Map();
 // Stores user IDs as strings.
 const mutedUsers = new Set();
 
+// ─── Pluggable mute executor ──────────────────────────────────────────────────
+// Set by bot.js via setMuteExecutor() once the Discord client is ready.
+// Signature: (guild, userId, durationMinutes, warningLevel, client) => Promise<boolean>
+let muteExecutor = null;
+
+/**
+ * Register the function that performs the actual channel-overwrite mute.
+ * Must be called by bot.js before any messages are processed.
+ *
+ * @param {Function} fn - async (guild, userId, durationMinutes, warningLevel, client) => boolean
+ */
+function setMuteExecutor(fn) {
+  muteExecutor = fn;
+  log('INFO', 'Mute executor registered.');
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 function log(level, message) {
@@ -68,56 +86,37 @@ function log(level, message) {
 // ─── muteUser ─────────────────────────────────────────────────────────────────
 
 /**
- * Mute a user in all text channels of the guild by denying SendMessages via
- * permission overwrites (consistent with the existing moderation system in
- * bot.js).  Schedules an automatic unmute after durationMinutes, then sends
- * the user a DM with an escalating warning embed.
+ * Mute a user by delegating to the executor registered by bot.js (which uses
+ * the same channel-overwrite logic as the /mute command), then send the user
+ * a DM with an escalating warning embed.
  *
- * @param {import('discord.js').Guild}  guild          - The guild to mute in.
- * @param {string}                      userId         - The ID of the user to mute.
+ * @param {import('discord.js').Guild}  guild           - The guild to mute in.
+ * @param {string}                      userId          - The ID of the user to mute.
  * @param {number}                      durationMinutes - How long to mute (minutes).
- * @param {number}                      warningLevel   - 0-5 violation index for the DM.
- * @param {import('discord.js').Client} client         - The Discord client (for DMs).
+ * @param {number}                      warningLevel    - 0-5 violation index for the DM.
+ * @param {import('discord.js').Client} client          - The Discord client (for DMs).
  * @returns {Promise<boolean>} true on success, false on failure
  */
 async function muteUser(guild, userId, durationMinutes, warningLevel, client) {
   // Clamp warningLevel to valid range
   const level = Math.max(0, Math.min(5, warningLevel));
 
+  if (!muteExecutor) {
+    log('WARN', `muteUser(${userId}): mute executor not yet registered — skipping mute.`);
+    return false;
+  }
+
   try {
-    const member = await guild.members.fetch(userId);
+    // Delegate the actual channel-overwrite mute to the executor provided by bot.js
+    const success = await muteExecutor(guild, userId, durationMinutes, level, client);
 
-    const textChannels = guild.channels.cache.filter(
-      ch => ch.type === ChannelType.GuildText
-    );
-
-    let mutedCount = 0;
-    await Promise.all(
-      textChannels.map(async ch => {
-        try {
-          await ch.permissionOverwrites.edit(member, { SendMessages: false }, {
-            reason: `Anti-spam: repeated mentions of protected user (warning ${level + 1}/6)`,
-          });
-          mutedCount++;
-        } catch {
-          // Skip channels where the bot lacks Manage Channel permission
-        }
-      })
-    );
-
-    if (mutedCount === 0) {
-      log('WARN', `Could not apply mute overwrites for ${userId} in guild ${guild.id} — bot may lack Manage Channels permission.`);
+    if (!success) {
+      log('WARN', `muteUser(${userId}): executor reported failure for guild ${guild.id}.`);
       return false;
     }
 
     mutedUsers.add(userId);
     log('INFO', `Muted user ${userId} in guild ${guild.id} for ${durationMinutes} minute(s) (warning level ${level + 1}/6).`);
-
-    // Schedule automatic unmute
-    const durationMs = durationMinutes * 60 * 1000;
-    setTimeout(async () => {
-      await unmuteUser(guild, userId);
-    }, durationMs);
 
     // ── Send DM warning ───────────────────────────────────────────────────────
     try {
@@ -271,4 +270,4 @@ async function checkMentions(message, client) {
 }
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
-module.exports = { checkMentions, muteUser, unmuteUser };
+module.exports = { checkMentions, muteUser, unmuteUser, setMuteExecutor };
