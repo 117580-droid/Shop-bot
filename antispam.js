@@ -4,7 +4,7 @@
 // Mutes are applied via a pluggable executor registered by bot.js so that the
 // anti-spam system uses the same /mute command logic as manual moderation.
 
-const { EmbedBuilder, ChannelType } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 // The Discord user ID that is protected from mention spam.
 const PROTECTED_USER_ID = '1417947408691757226';
@@ -150,8 +150,8 @@ async function muteUser(guild, userId, durationMinutes, warningLevel, client) {
 // ─── unmuteUser ───────────────────────────────────────────────────────────────
 
 /**
- * Remove the SendMessages denial from all text channels for the user, clear
- * them from the muted set, and reset their mention count.
+ * Remove the Discord native timeout from the user, clear them from the muted
+ * set, and reset their mention count.
  *
  * @param {import('discord.js').Guild} guild
  * @param {string} userId
@@ -160,16 +160,8 @@ async function unmuteUser(guild, userId) {
   try {
     const member = await guild.members.fetch(userId);
 
-    const textChannels = guild.channels.cache.filter(
-      ch => ch.type === ChannelType.GuildText
-    );
-
-    await Promise.all(
-      textChannels.map(ch =>
-        ch.permissionOverwrites.edit(member, { SendMessages: null })
-          .catch(() => {}) // ignore channels where we lack permission
-      )
-    );
+    // Remove the native Discord timeout (passing null clears it immediately)
+    await member.timeout(null, 'Anti-spam unmute');
 
     mutedUsers.delete(userId);
     mentionCounts.delete(userId);
