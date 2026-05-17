@@ -5,6 +5,7 @@ const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
+const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
@@ -483,7 +484,7 @@ const commands = [
 ];
 
 // ─── Register Commands ─────────────────────────────────────────────────────────
-const allCommands = [...commands, ...gameCommands, ...clanCommands, ...lotteryCommands];
+const allCommands = [...commands, ...gameCommands, ...clanCommands, ...lotteryCommands, ...giveawayCommands];
 
 async function registerCommands() {
   try {
@@ -503,6 +504,7 @@ const client = new Client({
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions,
   ],
 });
 
@@ -635,6 +637,11 @@ client.on('interactionCreate', async (interaction) => {
     // ── /spinwheel ────────────────────────────────────────────────────────────
     if (commandName === 'spinwheel') {
       return await handleLottery(interaction, db, client, updateBalance);
+    }
+
+    // ── /giveaway ─────────────────────────────────────────────────────────────
+    if (commandName === 'giveaway') {
+      return await handleGiveaway(interaction, client);
     }
 
     // ── /additem ──────────────────────────────────────────────────────────────
@@ -1351,6 +1358,19 @@ client.on('messageCreate', (message) => {
   handleXp(message, db).catch(err =>
     log('ERROR', `messageCreate XP handler: ${err?.message ?? err}`)
   );
+});
+
+// ─── Giveaway reaction tracking ───────────────────────────────────────────────
+// Partial reactions/messages must be fetched before they can be used.
+client.on('messageReactionAdd', async (reaction, user) => {
+  try {
+    // Fetch partial structures so all data is available
+    if (reaction.partial) await reaction.fetch();
+    if (reaction.message.partial) await reaction.message.fetch();
+    await handleGiveawayReaction(reaction, user);
+  } catch (err) {
+    log('ERROR', `messageReactionAdd giveaway handler: ${err?.message ?? err}`);
+  }
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
