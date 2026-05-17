@@ -5,7 +5,7 @@ const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
-const { checkMentions, unmuteUser } = require('./antispam.js');
+const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
@@ -447,13 +447,12 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('mute')
-    .setDescription('Mute a user in all text channels (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDescription('Mute a user in all text channels')
     .addUserOption(o =>
       o.setName('user').setDescription('The user to mute').setRequired(true)
     )
     .addStringOption(o =>
-      o.setName('time').setDescription('Duration of the mute, e.g. 1h, 30m, 1d').setRequired(true)
+      o.setName('duration').setDescription('How long to mute, e.g. 10m, 1h, 1d').setRequired(true)
     )
     .addStringOption(o =>
       o.setName('reason').setDescription('Reason for the mute')
@@ -483,8 +482,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('unmute')
-    .setDescription('Unmute a user (Owner/Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDescription('Unmute a user')
     .addUserOption(o =>
       o.setName('user').setDescription('The user to unmute').setRequired(true)
     )
@@ -517,8 +515,63 @@ const client = new Client({
   ],
 });
 
+// ─── Anti-spam mute executor ──────────────────────────────────────────────────
+// Called by antispam.js when cumulative mention spam is detected.
+// Performs the same channel-overwrite mute as the /mute command and schedules
+// an automatic unmute via the shared scheduledUnmutes map.
+async function executeMute(guild, userId, durationMinutes, warningLevel, clientRef) {
+  const durationMs = durationMinutes * 60 * 1000;
+  const reason     = 'Spamming mentions of Sam';
+
+  let targetMember;
+  try {
+    targetMember = await guild.members.fetch(userId);
+  } catch {
+    log('WARN', `executeMute: could not fetch member ${userId} in guild ${guild.id}`);
+    return false;
+  }
+
+  const textChannels = guild.channels.cache.filter(ch => ch.type === ChannelType.GuildText);
+
+  let mutedCount = 0;
+  await Promise.all(
+    textChannels.map(async ch => {
+      try {
+        await ch.permissionOverwrites.edit(targetMember, { SendMessages: false }, {
+          reason: `Anti-spam mute (warning ${warningLevel + 1}/6): ${reason}`,
+        });
+        mutedCount++;
+      } catch {
+        // Skip channels where the bot lacks Manage Channel permission
+      }
+    })
+  );
+
+  if (mutedCount === 0) {
+    log('WARN', `executeMute: could not apply overwrites for ${userId} in guild ${guild.id}`);
+    return false;
+  }
+
+  // Schedule automatic unmute via the shared map (picked up by processModerationSchedule)
+  const key = `${guild.id}:${userId}`;
+  scheduledUnmutes.set(key, {
+    guildId:  guild.id,
+    userId,
+    unmuteAt: Date.now() + durationMs,
+  });
+  log('INFO', `Anti-spam: muted ${userId} in guild ${guild.id} for ${durationMinutes}m (warning ${warningLevel + 1}/6).`);
+
+  return true;
+}
+
 client.once('ready', async () => {
   log('INFO', `Logged in as ${client.user.tag}`);
+
+  // Register the mute executor so antispam.js can trigger mutes through the
+  // same channel-overwrite mechanism used by the /mute command.
+  setMuteExecutor(executeMute);
+  log('INFO', 'Anti-spam mute executor registered.');
+
   await registerCommands();
 
   // Start the background task that keeps tracked leaderboard messages up to date,
@@ -982,14 +1035,23 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── /mute ─────────────────────────────────────────────────────────────────
     if (commandName === 'mute') {
+      // Restrict to the bot owner and the protected user ID
+      const ALLOWED_MUTE_IDS = [OWNER_ID, '1417947408691757226'].filter(Boolean);
+      if (!ALLOWED_MUTE_IDS.includes(user.id)) {
+        return await safeReply(interaction, {
+          content: '❌ You do not have permission to use this command.',
+          ephemeral: true,
+        });
+      }
+
       // Must be used inside a guild
       if (!interaction.guild) {
         return await safeReply(interaction, { content: '❌ This command can only be used inside a server.', ephemeral: true });
       }
 
-      const target  = interaction.options.getUser('user');
-      const timeStr = interaction.options.getString('time');
-      const reason  = (interaction.options.getString('reason') ?? '').trim() || 'No reason provided';
+      const target      = interaction.options.getUser('user');
+      const durationStr = interaction.options.getString('duration');
+      const reason      = (interaction.options.getString('reason') ?? '').trim() || 'No reason provided';
 
       if (!target) {
         return await safeReply(interaction, { content: '❌ Could not resolve the target user.', ephemeral: true });
@@ -1004,10 +1066,10 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Parse required duration
-      const durationMs = parseTime(timeStr);
+      const durationMs = parseTime(durationStr);
       if (durationMs === null) {
         return await safeReply(interaction, {
-          content: '❌ Invalid time format. Use a number followed by `w`, `d`, `h`, or `m` — e.g. `1h`, `30m`, `1d`.',
+          content: '❌ Invalid duration format. Use a number followed by `w`, `d`, `h`, or `m` — e.g. `10m`, `1h`, `1d`.',
           ephemeral: true,
         });
       }
@@ -1019,15 +1081,6 @@ client.on('interactionCreate', async (interaction) => {
       } catch {
         return await safeReply(interaction, {
           content: `❌ **${target.username}** is not in this server.`,
-          ephemeral: true,
-        });
-      }
-
-      // Prevent muting someone with equal or higher role hierarchy
-      const executorMember = await interaction.guild.members.fetch(user.id);
-      if (targetMember.roles.highest.position >= executorMember.roles.highest.position) {
-        return await safeReply(interaction, {
-          content: '❌ You cannot mute someone with an equal or higher role than yours.',
           ephemeral: true,
         });
       }
@@ -1066,6 +1119,24 @@ client.on('interactionCreate', async (interaction) => {
         unmuteAt: Date.now() + durationMs,
       });
       log('INFO', `Scheduled unmute for ${target.id} in guild ${interaction.guild.id} in ${formatDuration(durationMs)}.`);
+
+      // Send DM to the muted user
+      try {
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0xFEE75C)
+          .setTitle('🔇 You Have Been Muted')
+          .setDescription(`You have been muted in **${interaction.guild.name}**.`)
+          .addFields(
+            { name: 'Duration', value: formatDuration(durationMs), inline: true },
+            { name: 'Reason',   value: reason },
+          )
+          .setFooter({ text: `Muted by ${user.username}` })
+          .setTimestamp();
+
+        await target.send({ embeds: [dmEmbed] });
+      } catch {
+        // User may have DMs disabled — not a fatal error
+      }
 
       const unmuteTimestamp = `<t:${Math.floor((Date.now() + durationMs) / 1000)}:F>`;
 
