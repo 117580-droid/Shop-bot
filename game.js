@@ -466,6 +466,12 @@ const commands = [
         .setDescription('Server name or ID to add the hint in (DM use only)')
         .setRequired(false)
         .setAutocomplete(true)
+    )
+    .addStringOption(o =>
+      o.setName('channel')
+        .setDescription('Channel to post the hint in (defaults to topmost sendable channel)')
+        .setRequired(false)
+        .setAutocomplete(true)
     ),
 ];
 
@@ -699,16 +705,33 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         .setFooter({ text: `Added by ${user.username}` })
         .setTimestamp();
 
-      // Post the hint to the topmost sendable text channel in the target guild
-      // so all players can see it, not just the owner in DMs.
-      const sendableChannel = targetGuild.channels.cache
-        .filter(c =>
-          c.isTextBased() &&
-          !c.isThread() &&
-          c.permissionsFor(targetGuild.members.me)?.has('SendMessages')
-        )
-        .sort((a, b) => a.rawPosition - b.rawPosition)
-        .first();
+      // Post the hint to the specified channel, or fall back to the topmost
+      // sendable text channel in the target guild so all players can see it.
+      const channelArg = (interaction.options.getString('channel') ?? '').trim();
+
+      // Resolve the target channel: by explicit ID first, then fall back to topmost.
+      let sendableChannel = null;
+      if (channelArg) {
+        // channelArg may be a raw ID or the "Name (id)" format from autocomplete.
+        const channelIdMatch = channelArg.match(/(\d{17,20})\)?$/);
+        const resolvedId = channelIdMatch ? channelIdMatch[1] : channelArg;
+        const resolved = targetGuild.channels.cache.get(resolvedId);
+        if (resolved && resolved.isTextBased() && !resolved.isThread() &&
+            resolved.permissionsFor(targetGuild.members.me)?.has('SendMessages')) {
+          sendableChannel = resolved;
+        }
+      }
+
+      if (!sendableChannel) {
+        sendableChannel = targetGuild.channels.cache
+          .filter(c =>
+            c.isTextBased() &&
+            !c.isThread() &&
+            c.permissionsFor(targetGuild.members.me)?.has('SendMessages')
+          )
+          .sort((a, b) => a.rawPosition - b.rawPosition)
+          .first();
+      }
 
       let serverPostWarning = '';
       if (sendableChannel) {

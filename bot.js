@@ -557,6 +557,12 @@ const commands = [
         .setDescription('Specific user or role to ping (select a server first for suggestions)')
         .setRequired(false)
         .setAutocomplete(true)
+    )
+    .addStringOption(o =>
+      o.setName('channel')
+        .setDescription('Channel to send the announcement to (defaults to topmost sendable channel)')
+        .setRequired(false)
+        .setAutocomplete(true)
     ),
 ];
 
@@ -798,6 +804,45 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.respond(choices.slice(0, 25));
     } catch (err) {
       logError('autocomplete [announce:pingid]', err);
+      await interaction.respond([]);
+    }
+  }
+
+  // ── Channel autocomplete (announce and additemhint) ───────────────────────
+  if (focused.name === 'channel' &&
+      (interaction.commandName === 'announce' || interaction.commandName === 'additemhint')) {
+    const focusedValue = focused.value.toLowerCase();
+
+    // Resolve the target guild: use the current guild if in a server, otherwise
+    // look up the server option that was already filled in.
+    let targetGuild = interaction.guild ?? null;
+    if (!targetGuild) {
+      const serverArg = (interaction.options.getString('server') ?? '').trim();
+      if (serverArg) {
+        targetGuild = resolveGuild(client, serverArg);
+      }
+    }
+
+    if (!targetGuild) {
+      return await interaction.respond([
+        { name: '⚠️ Select a server first using the server option', value: '' },
+      ]);
+    }
+
+    try {
+      const choices = targetGuild.channels.cache
+        .filter(c =>
+          c.isTextBased() &&
+          !c.isThread() &&
+          c.permissionsFor(targetGuild.members.me)?.has('SendMessages')
+        )
+        .sort((a, b) => a.rawPosition - b.rawPosition)
+        .map(c => ({ name: `${c.name} (${c.id})`, value: c.id }))
+        .filter(c => c.name.toLowerCase().includes(focusedValue));
+
+      await interaction.respond([...choices].slice(0, 25));
+    } catch (err) {
+      logError(`autocomplete [${interaction.commandName}:channel]`, err);
       await interaction.respond([]);
     }
   }
@@ -1672,10 +1717,11 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      const message   = interaction.options.getString('message').trim();
-      const serverArg = (interaction.options.getString('server') ?? '').trim();
+      const message    = interaction.options.getString('message').trim();
+      const serverArg  = (interaction.options.getString('server') ?? '').trim();
       const pingChoice = interaction.options.getString('ping') ?? 'none';
       const pingId     = (interaction.options.getString('pingid') ?? '').trim();
+      const channelArg = (interaction.options.getString('channel') ?? '').trim();
 
       // Resolve the ping content string.
       // Priority: explicit pingid > ping choice of 'everyone' > no ping.
@@ -1717,16 +1763,31 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: `From ${user.username}` })
         .setTimestamp();
 
-      // Helper: send the embed to the first text channel the bot can message in a guild
-      async function sendToGuild(guild) {
-        const channel = guild.channels.cache
-          .filter(c =>
-            c.isTextBased() &&
-            !c.isThread() &&
-            c.permissionsFor(guild.members.me)?.has('SendMessages')
-          )
-          .sort((a, b) => a.rawPosition - b.rawPosition)
-          .first();
+      // Helper: send the embed to the specified channel, or fall back to the
+      // first sendable text channel in the guild.
+      async function sendToGuild(guild, specificChannelId = null) {
+        let channel = null;
+
+        // Try the explicitly requested channel first.
+        if (specificChannelId) {
+          const resolved = guild.channels.cache.get(specificChannelId);
+          if (resolved && resolved.isTextBased() && !resolved.isThread() &&
+              resolved.permissionsFor(guild.members.me)?.has('SendMessages')) {
+            channel = resolved;
+          }
+        }
+
+        // Fall back to the topmost sendable text channel.
+        if (!channel) {
+          channel = guild.channels.cache
+            .filter(c =>
+              c.isTextBased() &&
+              !c.isThread() &&
+              c.permissionsFor(guild.members.me)?.has('SendMessages')
+            )
+            .sort((a, b) => a.rawPosition - b.rawPosition)
+            .first();
+        }
 
         if (!channel) {
           log('WARN', `announce: no sendable text channel found in guild ${guild.id} (${guild.name})`);
@@ -1747,7 +1808,7 @@ client.on('interactionCreate', async (interaction) => {
 
       // ── Case 1: used inside a server — announce to that server only ──────────
       if (interaction.guild) {
-        const success = await sendToGuild(interaction.guild);
+        const success = await sendToGuild(interaction.guild, channelArg || null);
         if (!success) {
           return await safeReply(interaction, {
             content: '❌ Could not find a text channel to send the announcement in this server.',
@@ -1774,7 +1835,7 @@ client.on('interactionCreate', async (interaction) => {
           });
         }
 
-        const success = await sendToGuild(targetGuild);
+        const success = await sendToGuild(targetGuild, channelArg || null);
         if (!success) {
           return await safeReply(interaction, {
             content: `❌ Could not find a text channel to send the announcement in **${targetGuild.name}**.`,
