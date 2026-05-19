@@ -491,6 +491,21 @@ const commands = [
     .setName('restart')
     .setDescription('Restart the bot (owner only)')
     .setDMPermission(true),
+
+  new SlashCommandBuilder()
+    .setName('announce')
+    .setDescription('Send an announcement to one or all servers (owner only)')
+    .setDMPermission(true)
+    .addStringOption(o =>
+      o.setName('message')
+        .setDescription('The announcement text')
+        .setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID to announce in (DM use only; omit to announce to all servers)')
+        .setRequired(false)
+    ),
 ];
 
 // ─── Register Commands ─────────────────────────────────────────────────────────
@@ -1366,6 +1381,112 @@ client.on('interactionCreate', async (interaction) => {
 
       log('INFO', `${user.username} unmuted ${target.username} (${target.id}) in guild ${interaction.guild.id} — reason: ${reason}`);
       return await safeReply(interaction, { embeds: [embed] });
+    }
+
+    // ── /announce ─────────────────────────────────────────────────────────────
+    if (commandName === 'announce') {
+      // Owner-only guard
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
+      const message   = interaction.options.getString('message').trim();
+      const serverArg = (interaction.options.getString('server') ?? '').trim();
+
+      // Build the announcement embed
+      const announceEmbed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('📢 Announcement')
+        .setDescription(message)
+        .setFooter({ text: `From ${user.username}` })
+        .setTimestamp();
+
+      // Helper: send the embed to the first text channel the bot can message in a guild
+      async function sendToGuild(guild) {
+        const channel = guild.channels.cache
+          .filter(c =>
+            c.isTextBased() &&
+            !c.isThread() &&
+            c.permissionsFor(guild.members.me)?.has('SendMessages')
+          )
+          .sort((a, b) => a.rawPosition - b.rawPosition)
+          .first();
+
+        if (!channel) {
+          log('WARN', `announce: no sendable text channel found in guild ${guild.id} (${guild.name})`);
+          return false;
+        }
+
+        try {
+          await channel.send({ embeds: [announceEmbed] });
+          log('INFO', `announce: sent to guild ${guild.id} (${guild.name}) in channel ${channel.id}`);
+          return true;
+        } catch (err) {
+          logError(`announce: send to guild ${guild.id} (${guild.name})`, err);
+          return false;
+        }
+      }
+
+      // ── Case 1: used inside a server — announce to that server only ──────────
+      if (interaction.guild) {
+        const success = await sendToGuild(interaction.guild);
+        if (!success) {
+          return await safeReply(interaction, {
+            content: '❌ Could not find a text channel to send the announcement in this server.',
+            ephemeral: true,
+          });
+        }
+        return await safeReply(interaction, {
+          content: `✅ Announcement sent to **${interaction.guild.name}**.`,
+          ephemeral: true,
+        });
+      }
+
+      // ── Case 2: used in DMs with a specific server argument ─────────────────
+      if (serverArg) {
+        // Match by ID first, then by name (case-insensitive)
+        const targetGuild =
+          client.guilds.cache.get(serverArg) ??
+          client.guilds.cache.find(g => g.name.toLowerCase() === serverArg.toLowerCase());
+
+        if (!targetGuild) {
+          return await safeReply(interaction, {
+            content: `❌ Could not find a server matching **${serverArg}**. Use the exact server name or its ID.`,
+            ephemeral: true,
+          });
+        }
+
+        const success = await sendToGuild(targetGuild);
+        if (!success) {
+          return await safeReply(interaction, {
+            content: `❌ Could not find a text channel to send the announcement in **${targetGuild.name}**.`,
+            ephemeral: true,
+          });
+        }
+        return await safeReply(interaction, {
+          content: `✅ Announcement sent to **${targetGuild.name}**.`,
+          ephemeral: true,
+        });
+      }
+
+      // ── Case 3: used in DMs with no server argument — broadcast to all ───────
+      const guilds = [...client.guilds.cache.values()];
+      let successCount = 0;
+      let failCount    = 0;
+
+      for (const guild of guilds) {
+        const ok = await sendToGuild(guild);
+        if (ok) successCount++; else failCount++;
+      }
+
+      log('INFO', `announce: broadcast complete — ${successCount} succeeded, ${failCount} failed.`);
+      return await safeReply(interaction, {
+        content: `✅ Announcement sent to **${successCount}** server${successCount !== 1 ? 's' : ''}${failCount > 0 ? ` (failed to reach ${failCount})` : ''}.`,
+        ephemeral: true,
+      });
     }
 
     // ── /shutdown ─────────────────────────────────────────────────────────────
