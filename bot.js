@@ -396,10 +396,16 @@ const commands = [
     .setName('additem')
     .setDescription('Add a new item to the shop (Admin only)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(true)
     .addStringOption(o => o.setName('name').setDescription('Item name').setRequired(true))
     .addStringOption(o => o.setName('description').setDescription('Item description').setRequired(true))
     .addIntegerOption(o => o.setName('price').setDescription('Price in coins').setRequired(true).setMinValue(1))
-    .addIntegerOption(o => o.setName('stock').setDescription('Stock quantity (-1 for unlimited)').setMinValue(-1)),
+    .addIntegerOption(o => o.setName('stock').setDescription('Stock quantity (-1 for unlimited)').setMinValue(-1))
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID to add the item to (DM use only)')
+        .setRequired(false)
+    ),
 
   new SlashCommandBuilder()
     .setName('removeitem')
@@ -765,6 +771,35 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── /additem ──────────────────────────────────────────────────────────────
     if (commandName === 'additem') {
+      // Owner-only guard when used from DMs (no guild context means no member
+      // permissions to check, so fall back to the OWNER_ID env var).
+      if (!interaction.guild && (!OWNER_ID || user.id !== OWNER_ID)) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command from DMs.',
+          ephemeral: true,
+        });
+      }
+
+      // Resolve target guild: use current guild if in a server, otherwise
+      // require the server param when invoked from DMs.
+      let targetGuild = interaction.guild ?? null;
+      if (!targetGuild) {
+        const serverArg = (interaction.options.getString('server') ?? '').trim();
+        if (!serverArg) {
+          return await safeReply(interaction, {
+            content: '❌ You must specify a **server** when using this command from DMs.\nExample: `/additem name:Item description:Desc price:10 server:My Server Name`',
+            ephemeral: true,
+          });
+        }
+        targetGuild = resolveGuild(client, serverArg);
+        if (!targetGuild) {
+          return await safeReply(interaction, {
+            content: `❌ Could not find a server matching **${serverArg}**. Use the exact server name or its ID.`,
+            ephemeral: true,
+          });
+        }
+      }
+
       const name  = (interaction.options.getString('name') ?? '').trim().slice(0, 100);
       const desc  = (interaction.options.getString('description') ?? '').trim().slice(0, 500);
       const price = interaction.options.getInteger('price');
@@ -796,6 +831,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: 'Price',       value: `🪙 ${price} coins`,                     inline: true },
           { name: 'Stock',       value: stock === -1 ? 'Unlimited' : `${stock}`, inline: true },
           { name: 'Description', value: desc },
+          { name: 'Server',      value: targetGuild.name,                        inline: true },
         )
         .setFooter({ text: `Added by ${user.username}` })
         .setTimestamp();
