@@ -375,6 +375,21 @@ async function refreshTrackedLeaderboards(clientRef) {
   }
 }
 
+// ─── Guild Resolver ───────────────────────────────────────────────────────────
+/**
+ * Resolve a server name or ID string to a Guild object from the client cache.
+ * Matches by ID first, then by name (case-insensitive).
+ * Returns the Guild on success, or null if not found.
+ */
+function resolveGuild(clientRef, serverArg) {
+  if (!serverArg) return null;
+  return (
+    clientRef.guilds.cache.get(serverArg) ??
+    clientRef.guilds.cache.find(g => g.name.toLowerCase() === serverArg.toLowerCase()) ??
+    null
+  );
+}
+
 // ─── Slash Commands Definition ────────────────────────────────────────────────
 const commands = [
   new SlashCommandBuilder()
@@ -399,8 +414,14 @@ const commands = [
   new SlashCommandBuilder()
     .setName('buy')
     .setDescription('Purchase an item from the shop')
+    .setDMPermission(true)
     .addStringOption(o => o.setName('item').setDescription('Name of the item to buy').setRequired(true).setAutocomplete(true))
-    .addIntegerOption(o => o.setName('quantity').setDescription('How many to buy (default: 1)').setMinValue(1)),
+    .addIntegerOption(o => o.setName('quantity').setDescription('How many to buy (default: 1)').setMinValue(1))
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID to buy in (DM use only)')
+        .setRequired(false)
+    ),
 
   new SlashCommandBuilder()
     .setName('balance')
@@ -410,8 +431,14 @@ const commands = [
     .setName('givecoin')
     .setDescription('Give coins to a user (Admin only)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(true)
     .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
-    .addIntegerOption(o => o.setName('amount').setDescription('Amount of coins').setRequired(true)),
+    .addIntegerOption(o => o.setName('amount').setDescription('Amount of coins').setRequired(true))
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID (DM use only; used to log which server the coins were given in)')
+        .setRequired(false)
+    ),
 
   new SlashCommandBuilder()
     .setName('leaderboard')
@@ -696,7 +723,39 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── /spinwheel ────────────────────────────────────────────────────────────
     if (commandName === 'spinwheel') {
-      return await handleLottery(interaction, db, client, updateBalance);
+      // Owner-only guard
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        // Also allow server admins when used inside a guild
+        const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+        if (!isAdmin) {
+          return await safeReply(interaction, {
+            content: '❌ Only the bot owner or a server administrator can use this command.',
+            ephemeral: true,
+          });
+        }
+      }
+
+      // Resolve target guild: use current guild if in a server, otherwise
+      // require the server param when invoked from DMs.
+      let targetGuild = interaction.guild ?? null;
+      if (!targetGuild) {
+        const serverArg = (interaction.options.getString('server') ?? '').trim();
+        if (!serverArg) {
+          return await safeReply(interaction, {
+            content: '❌ You must specify a **server** when using this command from DMs.\nExample: `/spinwheel server:My Server Name`',
+            ephemeral: true,
+          });
+        }
+        targetGuild = resolveGuild(client, serverArg);
+        if (!targetGuild) {
+          return await safeReply(interaction, {
+            content: `❌ Could not find a server matching **${serverArg}**. Use the exact server name or its ID.`,
+            ephemeral: true,
+          });
+        }
+      }
+
+      return await handleLottery(interaction, db, client, updateBalance, targetGuild);
     }
 
     // ── /giveaway ─────────────────────────────────────────────────────────────
@@ -807,6 +866,26 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── /buy ──────────────────────────────────────────────────────────────────
     if (commandName === 'buy') {
+      // Resolve target guild: use current guild if in a server, otherwise
+      // require the server param when invoked from DMs.
+      let buyGuild = interaction.guild ?? null;
+      if (!buyGuild) {
+        const serverArg = (interaction.options.getString('server') ?? '').trim();
+        if (!serverArg) {
+          return await safeReply(interaction, {
+            content: '❌ You must specify a **server** when using this command from DMs.\nExample: `/buy item:50 WIN LOTTERY server:My Server Name`',
+            ephemeral: true,
+          });
+        }
+        buyGuild = resolveGuild(client, serverArg);
+        if (!buyGuild) {
+          return await safeReply(interaction, {
+            content: `❌ Could not find a server matching **${serverArg}**. Use the exact server name or its ID.`,
+            ephemeral: true,
+          });
+        }
+      }
+
       const itemName = (interaction.options.getString('item') ?? '').trim().slice(0, 100);
       const quantity = interaction.options.getInteger('quantity') ?? 1;
 
@@ -900,7 +979,7 @@ client.on('interactionCreate', async (interaction) => {
               { name: 'Item',       value: item.name,                            inline: true },
               { name: 'Quantity',   value: `${quantity}`,                        inline: true },
               { name: 'Total Cost', value: `🪙 ${totalCost} coins`,             inline: true },
-              { name: 'Server',     value: interaction.guild?.name ?? 'Unknown', inline: true },
+              { name: 'Server',     value: buyGuild?.name ?? 'Unknown', inline: true },
             )
             .setTimestamp();
 
@@ -929,6 +1008,35 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── /givecoin ─────────────────────────────────────────────────────────────
     if (commandName === 'givecoin') {
+      // Owner-only guard when used from DMs (no guild context means no member
+      // permissions to check, so fall back to the OWNER_ID env var).
+      if (!interaction.guild && (!OWNER_ID || user.id !== OWNER_ID)) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command from DMs.',
+          ephemeral: true,
+        });
+      }
+
+      // Resolve target guild for the server label in the response.
+      // When used in a server, use that guild; from DMs, use the server param.
+      let giveGuild = interaction.guild ?? null;
+      if (!giveGuild) {
+        const serverArg = (interaction.options.getString('server') ?? '').trim();
+        if (!serverArg) {
+          return await safeReply(interaction, {
+            content: '❌ You must specify a **server** when using this command from DMs.\nExample: `/givecoin user:@Someone amount:100 server:My Server Name`',
+            ephemeral: true,
+          });
+        }
+        giveGuild = resolveGuild(client, serverArg);
+        if (!giveGuild) {
+          return await safeReply(interaction, {
+            content: `❌ Could not find a server matching **${serverArg}**. Use the exact server name or its ID.`,
+            ephemeral: true,
+          });
+        }
+      }
+
       const target = interaction.options.getUser('user');
       const amount = interaction.options.getInteger('amount');
 
@@ -949,6 +1057,7 @@ client.on('interactionCreate', async (interaction) => {
             .setColor(0x57F287)
             .setTitle('🪙 Coins Given')
             .setDescription(`Gave **${amount} coins** to ${target}. They now have **${newBal} coins**.`)
+            .addFields({ name: 'Server', value: giveGuild.name, inline: true })
             .setTimestamp()
         ]
       });
