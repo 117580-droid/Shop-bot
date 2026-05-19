@@ -505,6 +505,20 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to announce in (DM use only; omit to announce to all servers)')
         .setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName('ping')
+        .setDescription('Who to ping with the announcement (default: no ping)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'No ping',  value: 'none'     },
+          { name: '@everyone', value: 'everyone' },
+        )
+    )
+    .addUserOption(o =>
+      o.setName('pinguser')
+        .setDescription('Specific user to ping with the announcement')
+        .setRequired(false)
     ),
 ];
 
@@ -1395,6 +1409,17 @@ client.on('interactionCreate', async (interaction) => {
 
       const message   = interaction.options.getString('message').trim();
       const serverArg = (interaction.options.getString('server') ?? '').trim();
+      const pingChoice = interaction.options.getString('ping') ?? 'none';
+      const pingUser   = interaction.options.getUser('pinguser');
+
+      // Resolve the ping content string
+      // Priority: explicit pinguser > ping choice of 'everyone' > no ping
+      let pingContent = null;
+      if (pingUser) {
+        pingContent = `<@${pingUser.id}>`;
+      } else if (pingChoice === 'everyone') {
+        pingContent = '@everyone';
+      }
 
       // Build the announcement embed
       const announceEmbed = new EmbedBuilder()
@@ -1421,7 +1446,9 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         try {
-          await channel.send({ embeds: [announceEmbed] });
+          const sendPayload = { embeds: [announceEmbed] };
+          if (pingContent) sendPayload.content = pingContent;
+          await channel.send(sendPayload);
           log('INFO', `announce: sent to guild ${guild.id} (${guild.name}) in channel ${channel.id}`);
           return true;
         } catch (err) {
