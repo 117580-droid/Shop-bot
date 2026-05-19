@@ -269,9 +269,10 @@ const userCooldowns = new Map();
 // ─── Item Game State ──────────────────────────────────────────────────────────
 // Tracks the active /guessitem game per guild. Each entry in the map is keyed
 // by guild ID and holds the item being guessed, accumulated hints, a daily hint
-// counter (resets each calendar day), and a log of all guesses.
+// counter (resets each calendar day), a daily-hint delivery tracker, and a log
+// of all guesses.
 //
-// itemGames:        guildId → { item, hints, hintDay, guesses }
+// itemGames:         guildId → { item, hints, hintDay, lastHintSentDay, guesses }
 // itemUserCooldowns: guildId → Map<userId, expiry timestamp (ms)>
 const itemGames = new Map();
 const itemUserCooldowns = new Map(); // guildId → Map<userId, expiry timestamp (ms)>
@@ -280,10 +281,11 @@ const itemUserCooldowns = new Map(); // guildId → Map<userId, expiry timestamp
 function getItemGame(guildId) {
   if (!itemGames.has(guildId)) {
     itemGames.set(guildId, {
-      item:    null,  // { name: string }
-      hints:   [],    // string[]
-      hintDay: null,  // YYYY-MM-DD (UTC)
-      guesses: [],    // { userId, username, guess, timestamp }[]
+      item:             null,  // { name: string }
+      hints:            [],    // string[]
+      hintDay:          null,  // YYYY-MM-DD (UTC) — day the last hint was revealed via wrong guess
+      lastHintSentDay:  null,  // YYYY-MM-DD (UTC) — day the last daily hint was auto-sent
+      guesses:          [],    // { userId, username, guess, timestamp }[]
     });
   }
   return itemGames.get(guildId);
@@ -628,10 +630,11 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
 
       // Reset the item game state for the new item (scoped to this guild).
       const game = getItemGame(targetGuild.id);
-      game.item    = { name: itemName };
-      game.hints   = [];
-      game.hintDay = null;
-      game.guesses = [];
+      game.item            = { name: itemName };
+      game.hints           = [];
+      game.hintDay         = null;
+      game.lastHintSentDay = null;
+      game.guesses         = [];
       getItemCooldownMap(targetGuild.id).clear();
 
       return await safeReply(interaction, {
@@ -810,10 +813,11 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         const foundItem = game.item.name;
 
         // Clear the game state so a new item can be set (scoped to this guild).
-        game.item    = null;
-        game.hints   = [];
-        game.hintDay = null;
-        game.guesses = [];
+        game.item            = null;
+        game.hints           = [];
+        game.hintDay         = null;
+        game.lastHintSentDay = null;
+        game.guesses         = [];
         getItemCooldownMap(targetGuild.id).clear();
 
         // Alert owner + secondary user.
@@ -916,4 +920,78 @@ async function checkCooldowns(client) {
   }
 }
 
-module.exports = { commands, handleGame, getCurrentPoi, initPoi, userCooldowns, checkCooldowns };
+// ─── Daily Hint Scheduler ─────────────────────────────────────────────────────
+// Called once per day (at midnight UTC) from bot.js. Iterates every active item
+// game across all guilds and, for each one that has hints available and hasn't
+// already sent a hint today, reveals the next hint in the server's first
+// available text channel and marks `lastHintSentDay` so it won't fire again
+// until the following UTC day.
+async function sendDailyHints(client) {
+  const today = todayUTC();
+
+  for (const [guildId, game] of itemGames) {
+    // Skip guilds with no active game or no hints loaded.
+    if (!game.item || game.hints.length === 0) continue;
+
+    // Skip if a hint was already auto-sent today.
+    if (game.lastHintSentDay === today) continue;
+
+    // Determine which hint to send next. The next hint index is the number of
+    // hints that have already been sent (0-based), capped at the last hint.
+    // We use `lastHintSentDay` transitions to count: each day we advance by one.
+    // For simplicity, count how many daily sends have occurred by tracking the
+    // index on the game state itself.
+    if (game.dailyHintIndex === undefined) game.dailyHintIndex = 0;
+
+    const hintIndex = Math.min(game.dailyHintIndex, game.hints.length - 1);
+    const hintText  = game.hints[hintIndex];
+    const hintNum   = hintIndex + 1;
+
+    // Resolve the guild from the client cache.
+    let guild;
+    try {
+      guild = await client.guilds.fetch(guildId);
+    } catch (err) {
+      logError(`sendDailyHints: fetch guild ${guildId}`, err);
+      continue;
+    }
+
+    // Find the first text channel the bot can send messages in, ordered by
+    // position so we land in the topmost visible channel (usually #general).
+    await guild.channels.fetch().catch(() => null); // populate cache
+    const channel = guild.channels.cache
+      .filter(c =>
+        c.isTextBased() &&
+        !c.isThread() &&
+        c.permissionsFor(guild.members.me)?.has('SendMessages')
+      )
+      .sort((a, b) => a.rawPosition - b.rawPosition)
+      .first();
+
+    if (!channel) {
+      logError(`sendDailyHints: no sendable channel in guild ${guildId} (${guild.name})`, 'no channel found');
+      continue;
+    }
+
+    try {
+      const embed = new EmbedBuilder()
+        .setColor(0xFEE75C)
+        .setTitle(`💡 Daily Hint — Hint ${hintNum} of ${game.hints.length}`)
+        .setDescription(`**💡 Daily Hint:** ${hintText}`)
+        .setFooter({ text: 'Use /guessitem to make a guess!' })
+        .setTimestamp();
+
+      await channel.send({ embeds: [embed] });
+
+      // Mark the hint as sent for today and advance the index for tomorrow.
+      game.lastHintSentDay = today;
+      game.dailyHintIndex  = hintIndex + 1;
+
+      console.log(`[sendDailyHints] Sent hint ${hintNum} to guild ${guildId} (${guild.name}) in channel ${channel.id}.`);
+    } catch (err) {
+      logError(`sendDailyHints: send to guild ${guildId} (${guild.name})`, err);
+    }
+  }
+}
+
+module.exports = { commands, handleGame, getCurrentPoi, initPoi, userCooldowns, checkCooldowns, sendDailyHints };

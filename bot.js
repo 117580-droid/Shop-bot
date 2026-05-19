@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuild
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
-const { commands: gameCommands, handleGame, checkCooldowns } = require('./game.js');
+const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
@@ -649,6 +649,29 @@ client.once('ready', async () => {
     );
   }, LEADERBOARD_REFRESH_MS);
   log('INFO', `Leaderboard auto-refresh, cooldown checker, and moderation scheduler started (every ${LEADERBOARD_REFRESH_MS / 1000}s).`);
+
+  // ── Daily hint scheduler ──────────────────────────────────────────────────
+  // Checks every minute whether it is midnight UTC (00:00). When it is, fires
+  // sendDailyHints() once for all active item games. A per-game `lastHintSentDay`
+  // guard ensures only one hint is delivered per guild per UTC day even if the
+  // interval fires slightly more than once around the boundary.
+  let lastDailyHintCheck = null;
+  setInterval(() => {
+    const now = new Date();
+    const utcHour   = now.getUTCHours();
+    const utcMinute = now.getUTCMinutes();
+    const todayKey  = now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Fire at 00:00 UTC, but only once per day (guard against duplicate ticks).
+    if (utcHour === 0 && utcMinute === 0 && lastDailyHintCheck !== todayKey) {
+      lastDailyHintCheck = todayKey;
+      log('INFO', `Daily hint scheduler triggered for ${todayKey}.`);
+      sendDailyHints(client).catch(err =>
+        logError('daily hint scheduler', err)
+      );
+    }
+  }, 60 * 1000); // check every minute
+  log('INFO', 'Daily hint scheduler started (fires at 00:00 UTC).');
 
   // ── Notify owner that the bot is online ──────────────────────────────────
   if (OWNER_ID) {
