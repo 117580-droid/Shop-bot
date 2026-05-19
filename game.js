@@ -267,15 +267,35 @@ let currentPoi = null;
 const userCooldowns = new Map();
 
 // ─── Item Game State ──────────────────────────────────────────────────────────
-// Tracks the active /guessitem game: the item being guessed, accumulated hints,
-// a daily hint counter (resets each calendar day), and per-user cooldowns.
-const itemGame = {
-  item:          null,   // { name: string } — set by the owner via /setitem (or future admin cmd)
-  hints:         [],     // string[] — hints added over time, numbered 1, 2, 3, …
-  hintDay:       null,   // ISO date string (YYYY-MM-DD) of the last hint reveal
-  guesses:       [],     // { userId, username, guess, timestamp }[] — log of all guesses
-};
-const itemUserCooldowns = new Map(); // userId → expiry timestamp (ms)
+// Tracks the active /guessitem game per guild. Each entry in the map is keyed
+// by guild ID and holds the item being guessed, accumulated hints, a daily hint
+// counter (resets each calendar day), and a log of all guesses.
+//
+// itemGames:        guildId → { item, hints, hintDay, guesses }
+// itemUserCooldowns: guildId → Map<userId, expiry timestamp (ms)>
+const itemGames = new Map();
+const itemUserCooldowns = new Map(); // guildId → Map<userId, expiry timestamp (ms)>
+
+/** Return (creating if absent) the item game state for a given guild. */
+function getItemGame(guildId) {
+  if (!itemGames.has(guildId)) {
+    itemGames.set(guildId, {
+      item:    null,  // { name: string }
+      hints:   [],    // string[]
+      hintDay: null,  // YYYY-MM-DD (UTC)
+      guesses: [],    // { userId, username, guess, timestamp }[]
+    });
+  }
+  return itemGames.get(guildId);
+}
+
+/** Return (creating if absent) the per-user cooldown map for a given guild. */
+function getItemCooldownMap(guildId) {
+  if (!itemUserCooldowns.has(guildId)) {
+    itemUserCooldowns.set(guildId, new Map());
+  }
+  return itemUserCooldowns.get(guildId);
+}
 
 function getRandomPoi(excludeName = null) {
   const filtered = excludeName ? FORTNITE_POIS.filter(p => p.name !== excludeName) : FORTNITE_POIS;
@@ -331,23 +351,25 @@ function formatMs(ms) {
 
 // ─── Item Game Helpers ────────────────────────────────────────────────────────
 
-function getItemCooldownRemaining(userId) {
-  const expires = itemUserCooldowns.get(userId);
+function getItemCooldownRemaining(guildId, userId) {
+  const cooldowns = getItemCooldownMap(guildId);
+  const expires = cooldowns.get(userId);
   if (!expires) return 0;
   const remaining = expires - Date.now();
   if (remaining <= 0) {
-    itemUserCooldowns.delete(userId);
+    cooldowns.delete(userId);
     return 0;
   }
   return remaining;
 }
 
-function setItemCooldown(userId) {
+function setItemCooldown(guildId, userId) {
+  const cooldowns = getItemCooldownMap(guildId);
   const now = Date.now();
-  for (const [id, expires] of itemUserCooldowns) {
-    if (expires <= now) itemUserCooldowns.delete(id);
+  for (const [id, expires] of cooldowns) {
+    if (expires <= now) cooldowns.delete(id);
   }
-  itemUserCooldowns.set(userId, now + ITEM_GUESS_COOLDOWN_MS);
+  cooldowns.set(userId, now + ITEM_GUESS_COOLDOWN_MS);
 }
 
 /** Returns today's date as a YYYY-MM-DD string (UTC). */
@@ -357,11 +379,12 @@ function todayUTC() {
 
 /**
  * Build the hints block shown to users.
+ * Accepts the guild-specific item game state object.
  * Returns an empty string when there are no hints yet.
  */
-function buildHintsText() {
-  if (!itemGame.hints.length) return '';
-  return itemGame.hints
+function buildHintsText(game) {
+  if (!game.hints.length) return '';
+  return game.hints
     .map((h, i) => `**Hint ${i + 1}:** ${h}`)
     .join('\n');
 }
@@ -392,6 +415,11 @@ const commands = [
       o.setName('guess')
         .setDescription('Your guess for the item or character name')
         .setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID to guess in (DM use only)')
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
@@ -403,6 +431,11 @@ const commands = [
       o.setName('name')
         .setDescription('The item or character name players must guess')
         .setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID to set the item in (DM use only)')
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
@@ -414,11 +447,16 @@ const commands = [
       o.setName('hint')
         .setDescription('The hint text to add')
         .setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID to add the hint in (DM use only)')
+        .setRequired(false)
     ),
 ];
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
-async function handleGame(interaction, updateBalance, client, onWin = null) {
+async function handleGame(interaction, updateBalance, client, onWin = null, targetGuild = null) {
   const { commandName, user } = interaction;
 
   // Read OWNER_ID once at the top of every invocation.
@@ -560,6 +598,13 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
         });
       }
 
+      if (!targetGuild) {
+        return await safeReply(interaction, {
+          content: '❌ You must specify a **server** when using this command from DMs.\nExample: `/setitem name:Item Name server:My Server Name`',
+          ephemeral: true,
+        });
+      }
+
       const rawName = interaction.options.getString('name');
       if (!rawName) {
         return await safeReply(interaction, { content: '❌ Please provide an item name.', ephemeral: true });
@@ -569,12 +614,13 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
         return await safeReply(interaction, { content: '❌ Item name cannot be empty.', ephemeral: true });
       }
 
-      // Reset the item game state for the new item.
-      itemGame.item    = { name: itemName };
-      itemGame.hints   = [];
-      itemGame.hintDay = null;
-      itemGame.guesses = [];
-      itemUserCooldowns.clear();
+      // Reset the item game state for the new item (scoped to this guild).
+      const game = getItemGame(targetGuild.id);
+      game.item    = { name: itemName };
+      game.hints   = [];
+      game.hintDay = null;
+      game.guesses = [];
+      getItemCooldownMap(targetGuild.id).clear();
 
       return await safeReply(interaction, {
         embeds: [
@@ -582,6 +628,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
             .setColor(0x5865F2)
             .setTitle('🎯 Item Game Started')
             .setDescription(`The hidden item has been set to **${itemName}**.\nAll previous hints and guesses have been cleared.`)
+            .addFields({ name: 'Server', value: targetGuild.name, inline: true })
             .setFooter({ text: `Set by ${user.username}` })
             .setTimestamp()
         ],
@@ -601,7 +648,16 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
         });
       }
 
-      if (!itemGame.item) {
+      if (!targetGuild) {
+        return await safeReply(interaction, {
+          content: '❌ You must specify a **server** when using this command from DMs.\nExample: `/additemhint hint:Your hint here server:My Server Name`',
+          ephemeral: true,
+        });
+      }
+
+      const game = getItemGame(targetGuild.id);
+
+      if (!game.item) {
         return await safeReply(interaction, {
           content: '❌ No item game is active. Use `/setitem` first.',
           ephemeral: true,
@@ -617,8 +673,8 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
         return await safeReply(interaction, { content: '❌ Hint cannot be empty.', ephemeral: true });
       }
 
-      itemGame.hints.push(hintText);
-      const hintNumber = itemGame.hints.length;
+      game.hints.push(hintText);
+      const hintNumber = game.hints.length;
 
       return await safeReply(interaction, {
         embeds: [
@@ -626,6 +682,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
             .setColor(0xFEE75C)
             .setTitle(`💡 Hint ${hintNumber} Added`)
             .setDescription(`**Hint ${hintNumber}:** ${hintText}`)
+            .addFields({ name: 'Server', value: targetGuild.name, inline: true })
             .setFooter({ text: `Added by ${user.username}` })
             .setTimestamp()
         ],
@@ -635,8 +692,18 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
 
     // /guessitem ───────────────────────────────────────────────────────────────
     if (commandName === 'guessitem') {
+      // targetGuild must be resolved before reaching here (by bot.js).
+      if (!targetGuild) {
+        return await safeReply(interaction, {
+          content: '❌ You must specify a **server** when using this command from DMs.\nExample: `/guessitem server:My Server Name`',
+          ephemeral: true,
+        });
+      }
+
+      const game = getItemGame(targetGuild.id);
+
       // If no game is active, tell the user.
-      if (!itemGame.item) {
+      if (!game.item) {
         return await safeReply(interaction, {
           embeds: [
             new EmbedBuilder()
@@ -653,7 +720,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
 
       // No guess provided — show current hints only.
       if (!rawGuess || !rawGuess.trim()) {
-        const hintsText = buildHintsText();
+        const hintsText = buildHintsText(game);
         return await safeReply(interaction, {
           embeds: [
             new EmbedBuilder()
@@ -675,7 +742,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
 
       // Cooldown check.
       const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
-      const remaining = getItemCooldownRemaining(user.id);
+      const remaining = getItemCooldownRemaining(targetGuild.id, user.id);
       if (!isOwner && remaining > 0) {
         return await safeReply(interaction, {
           content: `⏳ You guessed recently! You can guess again in **${formatMs(remaining)}**.`,
@@ -686,29 +753,29 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
       const guess = rawGuess.trim().slice(0, 200);
 
       // Log the guess.
-      itemGame.guesses.push({
+      game.guesses.push({
         userId:    user.id,
         username:  user.username,
         guess,
         timestamp: Date.now(),
       });
 
-      if (guess.toLowerCase() === itemGame.item.name.toLowerCase()) {
+      if (guess.toLowerCase() === game.item.name.toLowerCase()) {
         // ✅ Correct guess!
-        const foundItem = itemGame.item.name;
+        const foundItem = game.item.name;
 
-        // Clear the game state so a new item can be set.
-        itemGame.item    = null;
-        itemGame.hints   = [];
-        itemGame.hintDay = null;
-        itemGame.guesses = [];
-        itemUserCooldowns.clear();
+        // Clear the game state so a new item can be set (scoped to this guild).
+        game.item    = null;
+        game.hints   = [];
+        game.hintDay = null;
+        game.guesses = [];
+        getItemCooldownMap(targetGuild.id).clear();
 
         // Alert owner + secondary user.
         await alertBothUsers(
           client,
           '🎯 Someone Found the Item!',
-          `**${user.username}** (<@${user.id}>) found the item: **${foundItem}**!`,
+          `**${user.username}** (<@${user.id}>) found the item: **${foundItem}**! (server: **${targetGuild.name}**)`,
           0x57F287,
         );
 
@@ -726,17 +793,17 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
 
       } else {
         // ❌ Wrong guess — apply cooldown and show a hint.
-        if (!isOwner) setItemCooldown(user.id);
+        if (!isOwner) setItemCooldown(targetGuild.id, user.id);
 
         // Reveal one new hint per calendar day (UTC).
         const today = todayUTC();
-        if (itemGame.hints.length > 0 && itemGame.hintDay !== today) {
-          itemGame.hintDay = today;
+        if (game.hints.length > 0 && game.hintDay !== today) {
+          game.hintDay = today;
         }
 
-        const hintsText = buildHintsText();
+        const hintsText = buildHintsText(game);
 
-        console.log(`[guessitem] Wrong guess by ${user.username} (${user.id}): "${guess}"`);
+        console.log(`[guessitem] Wrong guess by ${user.username} (${user.id}) in ${targetGuild.name}: "${guess}"`);
 
         return await safeReply(interaction, {
           embeds: [
