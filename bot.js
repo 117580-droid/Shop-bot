@@ -582,6 +582,27 @@ client.once('ready', async () => {
     );
   }, LEADERBOARD_REFRESH_MS);
   log('INFO', `Leaderboard auto-refresh, cooldown checker, and moderation scheduler started (every ${LEADERBOARD_REFRESH_MS / 1000}s).`);
+
+  // ── Notify owner that the bot is online ──────────────────────────────────
+  if (OWNER_ID) {
+    try {
+      const owner = await client.users.fetch(OWNER_ID);
+      const readyEmbed = new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Bot Online')
+        .setDescription(`**${client.user.tag}** has connected to Discord and is ready.`)
+        .addFields(
+          { name: 'Logged in as', value: client.user.tag,          inline: true },
+          { name: 'Servers',      value: `${client.guilds.cache.size}`, inline: true },
+          { name: 'Timestamp',    value: `<t:${Math.floor(Date.now() / 1000)}:F>` },
+        )
+        .setTimestamp();
+      await owner.send({ content: '🟢 **Bot is now online!**', embeds: [readyEmbed] });
+      log('INFO', 'Sent startup notification DM to owner.');
+    } catch (err) {
+      logError('ready: DM owner startup notification', err);
+    }
+  }
 });
 
 // Surface Discord.js runtime errors (e.g. WebSocket disconnects) without
@@ -1362,6 +1383,24 @@ client.on('interactionCreate', async (interaction) => {
       });
 
       log('INFO', `Shutdown initiated by owner ${user.username} (${user.id}).`);
+
+      // ── Notify owner via DM before shutting down ───────────────────────────
+      try {
+        const owner = await client.users.fetch(OWNER_ID);
+        const shutdownEmbed = new EmbedBuilder()
+          .setColor(0xED4245)
+          .setTitle('🔴 Bot Shutting Down')
+          .setDescription('The bot is shutting down and will go offline now.')
+          .addFields(
+            { name: 'Initiated by', value: `${user.username} (<@${user.id}>)`, inline: true },
+            { name: 'Timestamp',    value: `<t:${Math.floor(Date.now() / 1000)}:F>`,          inline: true },
+          )
+          .setTimestamp();
+        await owner.send({ content: '🔴 **Bot is shutting down!**', embeds: [shutdownEmbed] });
+      } catch (err) {
+        logError('shutdown: DM owner notification', err);
+      }
+
       client.destroy();
       process.exit(0);
     }
@@ -1381,6 +1420,24 @@ client.on('interactionCreate', async (interaction) => {
       });
 
       log('INFO', `Restart initiated by owner ${user.username} (${user.id}).`);
+
+      // ── Notify owner via DM before restarting ──────────────────────────────
+      try {
+        const owner = await client.users.fetch(OWNER_ID);
+        const restartEmbed = new EmbedBuilder()
+          .setColor(0xFEE75C)
+          .setTitle('🔄 Bot Restarting')
+          .setDescription('The bot is restarting and will be back online shortly.')
+          .addFields(
+            { name: 'Initiated by', value: `${user.username} (<@${user.id}>)`, inline: true },
+            { name: 'Timestamp',    value: `<t:${Math.floor(Date.now() / 1000)}:F>`,          inline: true },
+          )
+          .setTimestamp();
+        await owner.send({ content: '🔄 **Bot is restarting!**', embeds: [restartEmbed] });
+      } catch (err) {
+        logError('restart: DM owner notification', err);
+      }
+
       client.destroy();
       process.exit(0);
     }
