@@ -381,10 +381,19 @@ function todayUTC() {
  * Build the hints block shown to users.
  * Accepts the guild-specific item game state object.
  * Returns an empty string when there are no hints yet.
+ * Hints are shuffled via Fisher-Yates on every call so the order is
+ * randomised each time they are displayed, making the game harder to
+ * solve by memorising hint positions.
  */
 function buildHintsText(game) {
   if (!game.hints.length) return '';
-  return game.hints
+  // Shallow-copy so the stored order is never mutated.
+  const shuffled = [...game.hints];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled
     .map((h, i) => `**Hint ${i + 1}:** ${h}`)
     .join('\n');
 }
@@ -743,8 +752,17 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         });
       }
 
-      // Cooldown check.
+      // Admin restriction: only the bot owner may submit guesses.
       const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+      const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+      if (isAdmin && !isOwner) {
+        return await safeReply(interaction, {
+          content: '🚫 Admins are not allowed to play the guessing game. Only the bot owner can guess.',
+          ephemeral: true,
+        });
+      }
+
+      // Cooldown check.
       const remaining = getItemCooldownRemaining(targetGuild.id, user.id);
       if (!isOwner && remaining > 0) {
         return await safeReply(interaction, {
