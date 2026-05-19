@@ -554,8 +554,9 @@ const commands = [
     )
     .addStringOption(o =>
       o.setName('pingid')
-        .setDescription('User ID or Role ID to ping with the announcement (paste the ID directly)')
+        .setDescription('Specific user or role to ping (select a server first for suggestions)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 ];
 
@@ -725,6 +726,55 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.respond(choices);
     } catch (err) {
       logError('autocomplete [buy]', err);
+      await interaction.respond([]);
+    }
+  }
+
+  if (interaction.commandName === 'announce' && focused.name === 'pingid') {
+    const focusedValue = focused.value.toLowerCase();
+    const serverArg    = (interaction.options.getString('server') ?? '').trim();
+
+    // If no server is selected yet, prompt the user to pick one first
+    if (!serverArg) {
+      return await interaction.respond([
+        { name: '⚠️ Select a server first using the server option', value: '' },
+      ]);
+    }
+
+    const targetGuild = resolveGuild(client, serverArg);
+    if (!targetGuild) {
+      return await interaction.respond([
+        { name: `❌ No server found matching "${serverArg}"`, value: '' },
+      ]);
+    }
+
+    try {
+      // Fetch all members so the cache is populated
+      await targetGuild.members.fetch();
+
+      const choices = [];
+
+      // Add all members (users) from the guild
+      for (const [, member] of targetGuild.members.cache) {
+        const label = `${member.user.username} (${member.user.id})`;
+        if (label.toLowerCase().includes(focusedValue) || member.user.id.includes(focusedValue)) {
+          choices.push({ name: label, value: member.user.id });
+        }
+      }
+
+      // Add all roles from the guild (skip @everyone — that's handled by the ping option)
+      for (const [, role] of targetGuild.roles.cache) {
+        if (role.name === '@everyone') continue;
+        const label = `@${role.name} (${role.id})`;
+        if (label.toLowerCase().includes(focusedValue) || role.id.includes(focusedValue)) {
+          choices.push({ name: label, value: role.id });
+        }
+      }
+
+      // Limit to 25 as required by Discord's autocomplete API.
+      await interaction.respond(choices.slice(0, 25));
+    } catch (err) {
+      logError('autocomplete [announce:pingid]', err);
       await interaction.respond([]);
     }
   }
@@ -1606,8 +1656,8 @@ client.on('interactionCreate', async (interaction) => {
 
       // Resolve the ping content string.
       // Priority: explicit pingid > ping choice of 'everyone' > no ping.
-      // If pingid is provided, detect whether it's a role ID or user ID by
-      // checking if the ID exists as a role in any of the bot's guilds.
+      // Determine whether pingid refers to a role or a user by checking the
+      // resolved guild's role cache first; fall back to a user mention.
       let pingContent = null;
       if (pingId) {
         // A Discord snowflake is 17–20 digits. Validate before using it.
@@ -1617,9 +1667,21 @@ client.on('interactionCreate', async (interaction) => {
             ephemeral: true,
           });
         }
-        // Check if the ID matches a role in any guild the bot is in.
-        const isRole = client.guilds.cache.some(g => g.roles.cache.has(pingId));
-        pingContent = isRole ? `<@&${pingId}>` : `<@${pingId}>`;
+        // Resolve the target guild so we can check its role cache specifically
+        const pingGuild =
+          interaction.guild ??
+          (serverArg
+            ? (client.guilds.cache.get(serverArg) ??
+               client.guilds.cache.find(g => g.name.toLowerCase() === serverArg.toLowerCase()))
+            : null);
+
+        if (pingGuild && pingGuild.roles.cache.has(pingId)) {
+          // It's a role ID in the target server
+          pingContent = `<@&${pingId}>`;
+        } else {
+          // Treat as a user ID
+          pingContent = `<@${pingId}>`;
+        }
       } else if (pingChoice === 'everyone') {
         pingContent = '@everyone';
       }
