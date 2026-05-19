@@ -280,6 +280,16 @@ const commands = [
             .setDescription('Message ID of the giveaway to end')
             .setRequired(true)
         )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('reroll')
+        .setDescription('Re-pick winners for an active giveaway')
+        .addStringOption(o =>
+          o.setName('message_id')
+            .setDescription('Message ID of the giveaway to reroll')
+            .setRequired(true)
+        )
     ),
 ];
 
@@ -566,6 +576,124 @@ async function handleGiveaway(interaction, client) {
 
       // concludeGiveaway removes the entry from activeGiveaways internally
       await concludeGiveaway(giveaway, client);
+    }
+
+    // ── /giveaway reroll ────────────────────────────────────────────────────
+    if (sub === 'reroll') {
+      const messageId = (interaction.options.getString('message_id') ?? '').trim();
+
+      if (!messageId) {
+        return await safeReply(interaction, {
+          content: '❌ Please provide a valid giveaway message ID.',
+          ephemeral: true,
+        });
+      }
+
+      const giveaway = activeGiveaways.get(messageId);
+      if (!giveaway) {
+        return await safeReply(interaction, {
+          content: `❌ No active giveaway found with message ID \`${messageId}\`. It may have already ended or been deleted.`,
+          ephemeral: true,
+        });
+      }
+
+      // Fetch the giveaway message to read current reactions
+      let channel, message;
+      try {
+        channel = await client.channels.fetch(giveaway.channelId);
+        message = await channel.messages.fetch(giveaway.messageId);
+      } catch (err) {
+        logError('reroll: fetch message', err);
+        return await safeReply(interaction, {
+          content: '❌ Failed to fetch the giveaway message. Please try again.',
+          ephemeral: true,
+        });
+      }
+
+      const newWinners = await pickWinners(message, giveaway.winnersCount, client);
+
+      // Update the live embed to reflect the new winners
+      try {
+        const endTimestamp = Math.floor(giveaway.endTime / 1000);
+        const winnerText = newWinners.length
+          ? newWinners.map(id => `<@${id}>`).join(', ')
+          : 'No valid entries — no winners this time.';
+
+        const rerolledEmbed = new EmbedBuilder()
+          .setColor(0xFEE75C)
+          .setTitle('🎉 GIVEAWAY 🎉')
+          .setDescription(
+            `**Prize:** ${giveaway.prize}\n\n` +
+            `React with 🎉 to enter!\n\n` +
+            `**Ends:** <t:${endTimestamp}:R> (<t:${endTimestamp}:F>)\n\n` +
+            `**🔁 Rerolled Winners:** ${winnerText}`
+          )
+          .addFields(
+            { name: '🏆 Winners',   value: `${giveaway.winnersCount}`,          inline: true },
+            { name: '⏱️ Duration',  value: formatDuration(giveaway.durationMs), inline: true },
+            { name: '🎟️ Hosted by', value: `<@${giveaway.hostedBy}>`,           inline: true },
+          )
+          .setFooter({ text: `Giveaway ID: ${giveaway.messageId}` })
+          .setTimestamp(giveaway.endTime);
+
+        await message.edit({ embeds: [rerolledEmbed] });
+      } catch (err) {
+        logError('reroll: update embed', err);
+      }
+
+      // Announce the new winners in the channel
+      try {
+        if (newWinners.length) {
+          const winnerMentions = newWinners.map(id => `<@${id}>`).join(', ');
+          await channel.send({
+            content: `🔁 Reroll! Congratulations ${winnerMentions}! You won **${giveaway.prize}**!`,
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle('🔁 Giveaway Rerolled!')
+                .setDescription(
+                  `**Prize:** ${giveaway.prize}\n` +
+                  `**New Winner${newWinners.length !== 1 ? 's' : ''}:** ${winnerMentions}`
+                )
+                .setFooter({ text: `Giveaway ID: ${giveaway.messageId} • Rerolled by ${interaction.user.username}` })
+                .setTimestamp(),
+            ],
+          });
+        } else {
+          await channel.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xED4245)
+                .setTitle('🔁 Giveaway Rerolled')
+                .setDescription(
+                  `The giveaway for **${giveaway.prize}** was rerolled, but there are still no valid entries.\n` +
+                  `No winners were selected.`
+                )
+                .setFooter({ text: `Giveaway ID: ${giveaway.messageId} • Rerolled by ${interaction.user.username}` })
+                .setTimestamp(),
+            ],
+          });
+        }
+      } catch (err) {
+        logError('reroll: send announcement', err);
+      }
+
+      console.log(`[INFO] Giveaway rerolled: messageId=${messageId} prize="${giveaway.prize}" newWinners=[${newWinners.join(', ')}] by ${interaction.user.id}`);
+
+      return await safeReply(interaction, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🔁 Giveaway Rerolled')
+            .setDescription(
+              newWinners.length
+                ? `New winner${newWinners.length !== 1 ? 's' : ''} picked for **${giveaway.prize}**: ${newWinners.map(id => `<@${id}>`).join(', ')}`
+                : `No valid entries found for **${giveaway.prize}** — no winners selected.`
+            )
+            .setTimestamp(),
+        ],
+        ephemeral: true,
+      });
     }
 
   } catch (err) {
