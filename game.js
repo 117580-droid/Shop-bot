@@ -679,16 +679,40 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
       game.hints.push(hintText);
       const hintNumber = game.hints.length;
 
+      const hintEmbed = new EmbedBuilder()
+        .setColor(0xFEE75C)
+        .setTitle(`💡 Hint ${hintNumber} Added`)
+        .setDescription(`**Hint ${hintNumber}:** ${hintText}`)
+        .addFields({ name: 'Server', value: targetGuild.name, inline: true })
+        .setFooter({ text: `Added by ${user.username}` })
+        .setTimestamp();
+
+      // Post the hint to the topmost sendable text channel in the target guild
+      // so all players can see it, not just the owner in DMs.
+      const sendableChannel = targetGuild.channels.cache
+        .filter(c =>
+          c.isTextBased() &&
+          !c.isThread() &&
+          c.permissionsFor(targetGuild.members.me)?.has('SendMessages')
+        )
+        .sort((a, b) => a.rawPosition - b.rawPosition)
+        .first();
+
+      let serverPostWarning = '';
+      if (sendableChannel) {
+        try {
+          await sendableChannel.send({ embeds: [hintEmbed] });
+        } catch (err) {
+          logError(`additemhint: send to guild ${targetGuild.id} channel ${sendableChannel.id}`, err);
+          serverPostWarning = '\n⚠️ Could not post to the server channel — check bot permissions.';
+        }
+      } else {
+        serverPostWarning = '\n⚠️ No sendable text channel found in the server — hint was not posted publicly.';
+      }
+
       return await safeReply(interaction, {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0xFEE75C)
-            .setTitle(`💡 Hint ${hintNumber} Added`)
-            .setDescription(`**Hint ${hintNumber}:** ${hintText}`)
-            .addFields({ name: 'Server', value: targetGuild.name, inline: true })
-            .setFooter({ text: `Added by ${user.username}` })
-            .setTimestamp()
-        ],
+        embeds: [hintEmbed],
+        content: serverPostWarning || undefined,
         ephemeral: true,
       });
     }
