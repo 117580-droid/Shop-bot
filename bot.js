@@ -405,6 +405,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to add the item to (DM use only)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 
   new SlashCommandBuilder()
@@ -427,6 +428,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to buy in (DM use only)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 
   new SlashCommandBuilder()
@@ -444,6 +446,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID (DM use only; used to log which server the coins were given in)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 
   new SlashCommandBuilder()
@@ -538,6 +541,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to announce in (DM use only; omit to announce to all servers)')
         .setRequired(false)
+        .setAutocomplete(true)
     )
     .addStringOption(o =>
       o.setName('ping')
@@ -548,9 +552,9 @@ const commands = [
           { name: '@everyone', value: 'everyone' },
         )
     )
-    .addUserOption(o =>
-      o.setName('pinguser')
-        .setDescription('Specific user to ping with the announcement')
+    .addStringOption(o =>
+      o.setName('pingid')
+        .setDescription('User ID or Role ID to ping with the announcement (paste the ID directly)')
         .setRequired(false)
     ),
 ];
@@ -677,8 +681,26 @@ client.on('error', (err) => {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isAutocomplete()) return;
 
+  const focused = interaction.options.getFocused(true);
+
+  // ── Server autocomplete (shared across all commands with a 'server' option) ──
+  if (focused.name === 'server') {
+    const focusedValue = focused.value.toLowerCase();
+    try {
+      const choices = client.guilds.cache
+        .map(g => ({ name: `${g.name} (${g.id})`, value: g.id }))
+        .filter(c => c.name.toLowerCase().includes(focusedValue))
+        .slice(0, 25);
+      await interaction.respond(choices);
+    } catch (err) {
+      logError('autocomplete [server]', err);
+      await interaction.respond([]);
+    }
+    return;
+  }
+
   if (interaction.commandName === 'removeitem') {
-    const focusedValue = interaction.options.getFocused().toLowerCase();
+    const focusedValue = focused.value.toLowerCase();
     try {
       const items = getAllItems();
       const choices = items
@@ -693,7 +715,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.commandName === 'buy') {
-    const focusedValue = interaction.options.getFocused().toLowerCase();
+    const focusedValue = focused.value.toLowerCase();
     try {
       const items = getAllItems();
       const choices = items
@@ -1580,13 +1602,24 @@ client.on('interactionCreate', async (interaction) => {
       const message   = interaction.options.getString('message').trim();
       const serverArg = (interaction.options.getString('server') ?? '').trim();
       const pingChoice = interaction.options.getString('ping') ?? 'none';
-      const pingUser   = interaction.options.getUser('pinguser');
+      const pingId     = (interaction.options.getString('pingid') ?? '').trim();
 
-      // Resolve the ping content string
-      // Priority: explicit pinguser > ping choice of 'everyone' > no ping
+      // Resolve the ping content string.
+      // Priority: explicit pingid > ping choice of 'everyone' > no ping.
+      // If pingid is provided, detect whether it's a role ID or user ID by
+      // checking if the ID exists as a role in any of the bot's guilds.
       let pingContent = null;
-      if (pingUser) {
-        pingContent = `<@${pingUser.id}>`;
+      if (pingId) {
+        // A Discord snowflake is 17–20 digits. Validate before using it.
+        if (!/^\d{17,20}$/.test(pingId)) {
+          return await safeReply(interaction, {
+            content: '❌ Invalid ID provided for `pingid`. Please paste a valid Discord user ID or role ID (17–20 digit number).',
+            ephemeral: true,
+          });
+        }
+        // Check if the ID matches a role in any guild the bot is in.
+        const isRole = client.guilds.cache.some(g => g.roles.cache.has(pingId));
+        pingContent = isRole ? `<@&${pingId}>` : `<@${pingId}>`;
       } else if (pingChoice === 'everyone') {
         pingContent = '@everyone';
       }
