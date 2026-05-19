@@ -59,7 +59,13 @@ const commands = [
   new SlashCommandBuilder()
     .setName('spinwheel')
     .setDescription('Spin the lottery wheel and pick a random winner (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(true)
+    .addStringOption(o =>
+      o.setName('server')
+        .setDescription('Server name or ID to spin the wheel in (DM use only)')
+        .setRequired(false)
+    ),
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -80,7 +86,7 @@ function sleep(ms) {
 }
 
 // ─── Command handler ──────────────────────────────────────────────────────────
-async function handleLottery(interaction, db, client, updateBalance) {
+async function handleLottery(interaction, db, client, updateBalance, targetGuild) {
   try {
     const participants = getLotteryParticipants(db);
 
@@ -118,7 +124,27 @@ async function handleLottery(interaction, db, client, updateBalance) {
       embeds: [countdownEmbed],
     });
 
-    const channel = interaction.channel;
+    // When invoked from DMs with a target guild, find the first sendable text
+    // channel in that guild; otherwise fall back to the interaction's channel.
+    let channel = interaction.channel;
+    if (targetGuild) {
+      const guildChannel = targetGuild.channels.cache
+        .filter(c =>
+          c.isTextBased() &&
+          !c.isThread() &&
+          c.permissionsFor(targetGuild.members.me)?.has('SendMessages')
+        )
+        .sort((a, b) => a.rawPosition - b.rawPosition)
+        .first();
+
+      if (!guildChannel) {
+        return await safeReply(interaction, {
+          content: `❌ Could not find a sendable text channel in **${targetGuild.name}**.`,
+          ephemeral: true,
+        });
+      }
+      channel = guildChannel;
+    }
 
     // ── Step 2: Countdown messages ────────────────────────────────────────────
     // Schedule: 3 min → 2 min → 1 min → 30 s → 10 s → 5 s → 4 s → 3 s → 2 s → 1 s
