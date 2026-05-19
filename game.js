@@ -211,6 +211,7 @@ const FORTNITE_POIS = [
 ];
 
 const COOLDOWN_MS = 90 * 60 * 1000;
+const ITEM_GUESS_COOLDOWN_MS = 30 * 1000; // 30-second cooldown for /guessitem
 
 // ─── Consistent error logger ──────────────────────────────────────────────────
 function logError(context, err) {
@@ -265,6 +266,17 @@ async function safeReply(interaction, payload) {
 let currentPoi = null;
 const userCooldowns = new Map();
 
+// ─── Item Game State ──────────────────────────────────────────────────────────
+// Tracks the active /guessitem game: the item being guessed, accumulated hints,
+// a daily hint counter (resets each calendar day), and per-user cooldowns.
+const itemGame = {
+  item:          null,   // { name: string } — set by the owner via /setitem (or future admin cmd)
+  hints:         [],     // string[] — hints added over time, numbered 1, 2, 3, …
+  hintDay:       null,   // ISO date string (YYYY-MM-DD) of the last hint reveal
+  guesses:       [],     // { userId, username, guess, timestamp }[] — log of all guesses
+};
+const itemUserCooldowns = new Map(); // userId → expiry timestamp (ms)
+
 function getRandomPoi(excludeName = null) {
   const filtered = excludeName ? FORTNITE_POIS.filter(p => p.name !== excludeName) : FORTNITE_POIS;
   return filtered[Math.floor(Math.random() * filtered.length)];
@@ -317,6 +329,43 @@ function formatMs(ms) {
   return parts.join(' ');
 }
 
+// ─── Item Game Helpers ────────────────────────────────────────────────────────
+
+function getItemCooldownRemaining(userId) {
+  const expires = itemUserCooldowns.get(userId);
+  if (!expires) return 0;
+  const remaining = expires - Date.now();
+  if (remaining <= 0) {
+    itemUserCooldowns.delete(userId);
+    return 0;
+  }
+  return remaining;
+}
+
+function setItemCooldown(userId) {
+  const now = Date.now();
+  for (const [id, expires] of itemUserCooldowns) {
+    if (expires <= now) itemUserCooldowns.delete(id);
+  }
+  itemUserCooldowns.set(userId, now + ITEM_GUESS_COOLDOWN_MS);
+}
+
+/** Returns today's date as a YYYY-MM-DD string (UTC). */
+function todayUTC() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Build the hints block shown to users.
+ * Returns an empty string when there are no hints yet.
+ */
+function buildHintsText() {
+  if (!itemGame.hints.length) return '';
+  return itemGame.hints
+    .map((h, i) => `**Hint ${i + 1}:** ${h}`)
+    .join('\n');
+}
+
 // ─── Commands ─────────────────────────────────────────────────────────────────
 const commands = [
   new SlashCommandBuilder()
@@ -333,6 +382,39 @@ const commands = [
     .setDescription("Skip a player's cooldown (Admin only)")
     .addUserOption(o => o.setName('player').setDescription('The player whose cooldown to skip').setRequired(true))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  // ── Item guessing game ────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('guessitem')
+    .setDescription('Guess the hidden item/character!')
+    .setDMPermission(true)
+    .addStringOption(o =>
+      o.setName('guess')
+        .setDescription('Your guess for the item or character name')
+        .setRequired(false)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('setitem')
+    .setDescription('Set the item/character to be guessed (Admin only)')
+    .setDMPermission(true)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o =>
+      o.setName('name')
+        .setDescription('The item or character name players must guess')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('additemhint')
+    .setDescription('Add a hint for the current item game (Admin only)')
+    .setDMPermission(true)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(o =>
+      o.setName('hint')
+        .setDescription('The hint text to add')
+        .setRequired(true)
+    ),
 ];
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -464,6 +546,215 @@ async function handleGame(interaction, updateBalance, client, onWin = null) {
       return await safeReply(interaction, {
         content: `✅ **${target.username}**'s cooldown has been removed — they can guess again!`,
       });
+    }
+
+    // /setitem ─────────────────────────────────────────────────────────────────
+    if (commandName === 'setitem') {
+      const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+      const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+
+      if (!isOwner && !isAdmin) {
+        return await safeReply(interaction, {
+          content: '❌ You do not have permission to use this command.',
+          ephemeral: true,
+        });
+      }
+
+      const rawName = interaction.options.getString('name');
+      if (!rawName) {
+        return await safeReply(interaction, { content: '❌ Please provide an item name.', ephemeral: true });
+      }
+      const itemName = rawName.trim().slice(0, 200);
+      if (!itemName) {
+        return await safeReply(interaction, { content: '❌ Item name cannot be empty.', ephemeral: true });
+      }
+
+      // Reset the item game state for the new item.
+      itemGame.item    = { name: itemName };
+      itemGame.hints   = [];
+      itemGame.hintDay = null;
+      itemGame.guesses = [];
+      itemUserCooldowns.clear();
+
+      return await safeReply(interaction, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🎯 Item Game Started')
+            .setDescription(`The hidden item has been set to **${itemName}**.\nAll previous hints and guesses have been cleared.`)
+            .setFooter({ text: `Set by ${user.username}` })
+            .setTimestamp()
+        ],
+        ephemeral: true,
+      });
+    }
+
+    // /additemhint ─────────────────────────────────────────────────────────────
+    if (commandName === 'additemhint') {
+      const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+      const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+
+      if (!isOwner && !isAdmin) {
+        return await safeReply(interaction, {
+          content: '❌ You do not have permission to use this command.',
+          ephemeral: true,
+        });
+      }
+
+      if (!itemGame.item) {
+        return await safeReply(interaction, {
+          content: '❌ No item game is active. Use `/setitem` first.',
+          ephemeral: true,
+        });
+      }
+
+      const rawHint = interaction.options.getString('hint');
+      if (!rawHint) {
+        return await safeReply(interaction, { content: '❌ Please provide a hint.', ephemeral: true });
+      }
+      const hintText = rawHint.trim().slice(0, 500);
+      if (!hintText) {
+        return await safeReply(interaction, { content: '❌ Hint cannot be empty.', ephemeral: true });
+      }
+
+      itemGame.hints.push(hintText);
+      const hintNumber = itemGame.hints.length;
+
+      return await safeReply(interaction, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xFEE75C)
+            .setTitle(`💡 Hint ${hintNumber} Added`)
+            .setDescription(`**Hint ${hintNumber}:** ${hintText}`)
+            .setFooter({ text: `Added by ${user.username}` })
+            .setTimestamp()
+        ],
+        ephemeral: true,
+      });
+    }
+
+    // /guessitem ───────────────────────────────────────────────────────────────
+    if (commandName === 'guessitem') {
+      // If no game is active, tell the user.
+      if (!itemGame.item) {
+        return await safeReply(interaction, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x5865F2)
+              .setTitle('🎮 Item Guessing Game')
+              .setDescription('There is no active item game right now. Check back later!')
+              .setTimestamp()
+          ],
+          ephemeral: true,
+        });
+      }
+
+      const rawGuess = interaction.options.getString('guess');
+
+      // No guess provided — show current hints only.
+      if (!rawGuess || !rawGuess.trim()) {
+        const hintsText = buildHintsText();
+        return await safeReply(interaction, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x5865F2)
+              .setTitle('🎮 Item Guessing Game')
+              .setDescription(
+                `Can you guess the hidden item or character?\n\n` +
+                (hintsText
+                  ? `**Hints so far:**\n${hintsText}`
+                  : '*No hints have been revealed yet. Check back tomorrow!*') +
+                `\n\nUse \`/guessitem guess:<your answer>\` to make a guess.`
+              )
+              .setFooter({ text: 'Wrong guesses give you a 30-second cooldown!' })
+              .setTimestamp()
+          ],
+          ephemeral: true,
+        });
+      }
+
+      // Cooldown check.
+      const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+      const remaining = getItemCooldownRemaining(user.id);
+      if (!isOwner && remaining > 0) {
+        return await safeReply(interaction, {
+          content: `⏳ You guessed recently! You can guess again in **${formatMs(remaining)}**.`,
+          ephemeral: true,
+        });
+      }
+
+      const guess = rawGuess.trim().slice(0, 200);
+
+      // Log the guess.
+      itemGame.guesses.push({
+        userId:    user.id,
+        username:  user.username,
+        guess,
+        timestamp: Date.now(),
+      });
+
+      if (guess.toLowerCase() === itemGame.item.name.toLowerCase()) {
+        // ✅ Correct guess!
+        const foundItem = itemGame.item.name;
+
+        // Clear the game state so a new item can be set.
+        itemGame.item    = null;
+        itemGame.hints   = [];
+        itemGame.hintDay = null;
+        itemGame.guesses = [];
+        itemUserCooldowns.clear();
+
+        // Alert owner + secondary user.
+        await alertBothUsers(
+          client,
+          '🎯 Someone Found the Item!',
+          `**${user.username}** (<@${user.id}>) found the item: **${foundItem}**!`,
+          0x57F287,
+        );
+
+        return await safeReply(interaction, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x57F287)
+              .setDescription(
+                `🪙 1 coin **${user.username}** found the item\n\n` +
+                (OWNER_ID ? `DM <@${OWNER_ID}> to claim your win!` : 'Contact the owner to claim your win!')
+              )
+              .setTimestamp()
+          ],
+        });
+
+      } else {
+        // ❌ Wrong guess — apply cooldown and show a hint.
+        if (!isOwner) setItemCooldown(user.id);
+
+        // Reveal one new hint per calendar day (UTC).
+        const today = todayUTC();
+        if (itemGame.hints.length > 0 && itemGame.hintDay !== today) {
+          itemGame.hintDay = today;
+        }
+
+        const hintsText = buildHintsText();
+
+        console.log(`[guessitem] Wrong guess by ${user.username} (${user.id}): "${guess}"`);
+
+        return await safeReply(interaction, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xED4245)
+              .setTitle('❌ Wrong Guess!')
+              .setDescription(
+                `That's not the right item. Try again!\n\n` +
+                (hintsText
+                  ? `**Hints so far:**\n${hintsText}`
+                  : '*No hints available yet.*')
+              )
+              .setFooter({ text: 'You have a 30-second cooldown before guessing again.' })
+              .setTimestamp()
+          ],
+          ephemeral: true,
+        });
+      }
     }
 
   } catch (err) {
