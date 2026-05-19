@@ -718,13 +718,38 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── Game commands ─────────────────────────────────────────────────────────
     if (['guess', 'currentpoi', 'skipcooldown', 'guessitem', 'setitem', 'additemhint'].includes(commandName)) {
+      // For item game commands that support DM use, resolve the target guild
+      // before dispatching. When used inside a server, use that guild directly
+      // and ignore the server param. When used from DMs, require the server param.
+      let itemTargetGuild = null;
+      if (['guessitem', 'setitem', 'additemhint'].includes(commandName)) {
+        if (interaction.guild) {
+          // In a server — use the current guild, ignore any server param.
+          itemTargetGuild = interaction.guild;
+        } else {
+          // In DMs — resolve from the server param.
+          const serverArg = (interaction.options.getString('server') ?? '').trim();
+          if (serverArg) {
+            itemTargetGuild = resolveGuild(client, serverArg);
+            if (!itemTargetGuild) {
+              return await safeReply(interaction, {
+                content: `❌ Could not find a server matching **${serverArg}**. Use the exact server name or its ID.`,
+                ephemeral: true,
+              });
+            }
+          }
+          // If serverArg is empty, itemTargetGuild stays null and handleGame
+          // will return the appropriate "specify a server" error message.
+        }
+      }
+
       return await handleGame(interaction, updateBalance, client, () => {
         // Immediately push a fresh embed to all tracked leaderboard messages
         // so the new win is reflected without waiting for the next 30-second tick.
         refreshTrackedLeaderboards(client).catch(err =>
           logError('leaderboard post-win refresh', err)
         );
-      });
+      }, itemTargetGuild);
     }
 
     // ── /spinwheel ────────────────────────────────────────────────────────────
