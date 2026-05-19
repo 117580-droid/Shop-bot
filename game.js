@@ -420,6 +420,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to guess in (DM use only)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 
   new SlashCommandBuilder()
@@ -436,6 +437,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to set the item in (DM use only)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 
   new SlashCommandBuilder()
@@ -452,6 +454,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to add the hint in (DM use only)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 ];
 

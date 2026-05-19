@@ -65,6 +65,7 @@ const commands = [
       o.setName('server')
         .setDescription('Server name or ID to spin the wheel in (DM use only)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
 ];
 
