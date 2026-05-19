@@ -62,6 +62,23 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Resolve a Discord user's display name, falling back to a mention. */
+async function resolveUsername(client, userId) {
+  try {
+    const user = await client.users.fetch(userId);
+    return user.username;
+  } catch {
+    return null;
+  }
+}
+
+/** Sleep for `ms` milliseconds. */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // ─── Command handler ──────────────────────────────────────────────────────────
 async function handleLottery(interaction, db, client, updateBalance) {
   try {
@@ -74,46 +91,182 @@ async function handleLottery(interaction, db, client, updateBalance) {
       });
     }
 
-    // Pick a random entry (weighted by ticket count naturally, since each
-    // purchase inserts a separate row).
+    const totalTickets  = participants.length;
+    const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
+    const uniqueEntries = uniqueUserIds.length;
+
+    // ── Step 1: @everyone ping + initial countdown embed ─────────────────────
+    const countdownEmbed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🎡 The Lottery Wheel is About to Spin!')
+      .setDescription(
+        `@everyone\n\n` +
+        `The wheel will spin in **3 minutes**! 🕐\n\n` +
+        `Get ready — a winner is about to be chosen from the **50 WIN LOTTERY**!`
+      )
+      .addFields(
+        { name: '🎟️ Total Tickets',   value: `${totalTickets}`,  inline: true },
+        { name: '👥 Unique Entrants', value: `${uniqueEntries}`, inline: true },
+      )
+      .setFooter({ text: 'Spinning soon…' })
+      .setTimestamp();
+
+    // Defer the reply so we have time for the full countdown sequence.
+    await interaction.deferReply();
+    await interaction.editReply({
+      content: '@everyone',
+      embeds: [countdownEmbed],
+    });
+
+    const channel = interaction.channel;
+
+    // ── Step 2: Countdown messages ────────────────────────────────────────────
+    // Schedule: 3 min → 2 min → 1 min → 30 s → 10 s → 5 s → 4 s → 3 s → 2 s → 1 s
+    const countdownSteps = [
+      { waitMs: 60_000, label: '2 minutes' },
+      { waitMs: 60_000, label: '1 minute'  },
+      { waitMs: 30_000, label: '30 seconds' },
+      { waitMs: 20_000, label: '10 seconds' },
+      { waitMs:  5_000, label: '5 seconds'  },
+      { waitMs:  1_000, label: '4 seconds'  },
+      { waitMs:  1_000, label: '3 seconds'  },
+      { waitMs:  1_000, label: '2 seconds'  },
+      { waitMs:  1_000, label: '1 second'   },
+    ];
+
+    for (const step of countdownSteps) {
+      await sleep(step.waitMs);
+      try {
+        await channel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xEB459E)
+              .setDescription(`⏳ The wheel spins in **${step.label}**!`),
+          ],
+        });
+      } catch (err) {
+        logError('handleLottery: countdown message', err);
+      }
+    }
+
+    // Final 1-second pause before the spin animation begins.
+    await sleep(1_000);
+
+    // ── Step 3: Spinning wheel animation ─────────────────────────────────────
+    const spinFrames = ['🎡', '🎢', '🎠', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎮'];
+    const spinDurationMs = 3_000;
+    const frameIntervalMs = 100;
+    const totalFrames = spinDurationMs / frameIntervalMs; // 30 frames
+
+    let spinMsg;
+    try {
+      spinMsg = await channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xFEE75C)
+            .setTitle('🎡 The Wheel is Spinning!')
+            .setDescription(`${spinFrames[0]} **Spinning…**`),
+        ],
+      });
+    } catch (err) {
+      logError('handleLottery: spin message send', err);
+    }
+
+    if (spinMsg) {
+      for (let i = 1; i <= totalFrames; i++) {
+        await sleep(frameIntervalMs);
+        const frame = spinFrames[i % spinFrames.length];
+        // Only edit every other frame to stay well within Discord's rate limit
+        // (5 edits / 5 s per message), while still looking animated.
+        if (i % 2 === 0) {
+          try {
+            await spinMsg.edit({
+              embeds: [
+                new EmbedBuilder()
+                  .setColor(0xFEE75C)
+                  .setTitle('🎡 The Wheel is Spinning!')
+                  .setDescription(`${frame} **Spinning…**`),
+              ],
+            });
+          } catch (err) {
+            logError('handleLottery: spin frame edit', err);
+          }
+        }
+      }
+    }
+
+    // ── Step 4: Pick the winner ───────────────────────────────────────────────
     const winnerEntry = participants[Math.floor(Math.random() * participants.length)];
     const winnerId    = winnerEntry.user_id;
 
     // Award 50 coins to the winner.
     updateBalance(winnerId, 50);
 
-    // Resolve the winner's username for display.
-    let winnerTag = `<@${winnerId}>`;
-    try {
-      const winnerUser = await client.users.fetch(winnerId);
-      winnerTag = `${winnerUser.username} (<@${winnerId}>)`;
-    } catch {
-      // Non-fatal — fall back to mention only
-    }
+    // Resolve display names for all unique participants.
+    const nameMap = new Map(); // userId → display name
+    await Promise.all(
+      uniqueUserIds.map(async uid => {
+        const name = await resolveUsername(client, uid);
+        nameMap.set(uid, name ?? `<@${uid}>`);
+      })
+    );
 
-    // Count unique participants and total tickets for the result embed.
-    const totalTickets  = participants.length;
-    const uniqueEntries = new Set(participants.map(p => p.user_id)).size;
+    const winnerDisplayName = nameMap.get(winnerId) ?? `<@${winnerId}>`;
+    const winnerTag = `${winnerDisplayName} (<@${winnerId}>)`;
 
     // Clear the wheel now that a winner has been chosen.
     clearLottery(db);
 
-    // Build the public result embed.
-    const resultEmbed = new EmbedBuilder()
+    // ── Step 5: Live wheel display with all names + winner highlighted ────────
+    const wheelLines = uniqueUserIds.map(uid => {
+      const name    = nameMap.get(uid) ?? `<@${uid}>`;
+      const tickets = participants.filter(p => p.user_id === uid).length;
+      const isWinner = uid === winnerId;
+      return isWinner
+        ? `🏆 **${name}** ← WINNER! (${tickets} ticket${tickets !== 1 ? 's' : ''})`
+        : `▫️ ${name} (${tickets} ticket${tickets !== 1 ? 's' : ''})`;
+    });
+
+    const wheelEmbed = new EmbedBuilder()
       .setColor(0xFEE75C)
-      .setTitle('🎡 Lottery Wheel Spun!')
-      .setDescription(`🎉 **${winnerTag}** has won the lottery!`)
+      .setTitle('🎡 Lottery Wheel — Final Result')
+      .setDescription(wheelLines.join('\n'))
       .addFields(
-        { name: '🪙 Prize',           value: '50 coins',              inline: true },
-        { name: '🎟️ Total Tickets',   value: `${totalTickets}`,       inline: true },
-        { name: '👥 Unique Entrants', value: `${uniqueEntries}`,      inline: true },
+        { name: '🎟️ Total Tickets',   value: `${totalTickets}`,  inline: true },
+        { name: '👥 Unique Entrants', value: `${uniqueEntries}`, inline: true },
       )
       .setFooter({ text: 'The wheel has been cleared. Buy a new ticket to enter the next round!' })
       .setTimestamp();
 
-    await safeReply(interaction, { embeds: [resultEmbed] });
+    try {
+      if (spinMsg) {
+        await spinMsg.edit({ embeds: [wheelEmbed] });
+      } else {
+        await channel.send({ embeds: [wheelEmbed] });
+      }
+    } catch (err) {
+      logError('handleLottery: wheel result edit', err);
+      try { await channel.send({ embeds: [wheelEmbed] }); } catch { /* non-fatal */ }
+    }
 
-    // DM the winner to notify them.
+    // ── Step 6: Final winner announcement ────────────────────────────────────
+    const resultEmbed = new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('🎉 We Have a Winner!')
+      .setDescription(`🏆 Congratulations to **${winnerTag}** for winning the **50 WIN LOTTERY**!`)
+      .addFields(
+        { name: '🪙 Prize',           value: '50 coins',         inline: true },
+        { name: '🎟️ Winning Ticket',  value: `1 of ${totalTickets}`, inline: true },
+      )
+      .setTimestamp();
+
+    try {
+      await channel.send({ content: `🎉 <@${winnerId}>`, embeds: [resultEmbed] });
+    } catch (err) {
+      logError('handleLottery: final announcement', err);
+    }
+
+    // ── Step 7: DM the winner ─────────────────────────────────────────────────
     try {
       const winnerUser = await client.users.fetch(winnerId);
       const dmEmbed = new EmbedBuilder()
