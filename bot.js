@@ -481,6 +481,16 @@ const commands = [
     .addStringOption(o =>
       o.setName('reason').setDescription('Reason for unmuting (optional)')
     ),
+
+  new SlashCommandBuilder()
+    .setName('shutdown')
+    .setDescription('Shut down the bot (owner only)')
+    .setDMPermission(true),
+
+  new SlashCommandBuilder()
+    .setName('restart')
+    .setDescription('Restart the bot (owner only)')
+    .setDMPermission(true),
 ];
 
 // ─── Register Commands ─────────────────────────────────────────────────────────
@@ -1335,6 +1345,44 @@ client.on('interactionCreate', async (interaction) => {
 
       log('INFO', `${user.username} unmuted ${target.username} (${target.id}) in guild ${interaction.guild.id} — reason: ${reason}`);
       return await safeReply(interaction, { embeds: [embed] });
+    }
+
+    // ── /shutdown ─────────────────────────────────────────────────────────────
+    if (commandName === 'shutdown') {
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
+      await safeReply(interaction, {
+        content: '🔴 Shutting down the bot. Goodbye!',
+        ephemeral: true,
+      });
+
+      log('INFO', `Shutdown initiated by owner ${user.username} (${user.id}).`);
+      client.destroy();
+      process.exit(0);
+    }
+
+    // ── /restart ──────────────────────────────────────────────────────────────
+    if (commandName === 'restart') {
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
+      await safeReply(interaction, {
+        content: '🔄 Restarting the bot. Be right back!',
+        ephemeral: true,
+      });
+
+      log('INFO', `Restart initiated by owner ${user.username} (${user.id}).`);
+      client.destroy();
+      process.exit(0);
     }
 
   } catch (err) {
