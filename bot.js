@@ -717,7 +717,7 @@ client.on('interactionCreate', async (interaction) => {
   try {
 
     // ── Game commands ─────────────────────────────────────────────────────────
-    if (['guess', 'currentpoi'].includes(commandName)) {
+    if (['guess', 'currentpoi', 'skipcooldown', 'guessitem', 'setitem', 'additemhint'].includes(commandName)) {
       return await handleGame(interaction, updateBalance, client, () => {
         // Immediately push a fresh embed to all tracked leaderboard messages
         // so the new win is reflected without waiting for the next 30-second tick.
