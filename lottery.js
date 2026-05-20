@@ -1,8 +1,21 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const crypto = require('crypto');
 
 // ─── Consistent error logger ──────────────────────────────────────────────────
 function logError(context, err) {
   console.error(`[ERROR] lottery/${context}: ${err?.message ?? err}`);
+}
+
+// ─── Spin server reference (injected via setSpinServer) ───────────────────────
+let _spinServer = null;
+
+/**
+ * Inject the spinServer module so lottery.js can create sessions and push events.
+ * Called once from bot.js after the spin server has started.
+ * @param {object} spinServer - The spinServer module export.
+ */
+function setSpinServer(spinServer) {
+  _spinServer = spinServer;
 }
 
 // ─── Safe interaction reply ───────────────────────────────────────────────────
@@ -86,6 +99,39 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ─── Multi-channel broadcast helper ──────────────────────────────────────────
+
+/**
+ * Find a channel by name (case-insensitive) in a guild that the bot can send to.
+ * Returns the channel or null if not found / not sendable.
+ * @param {import('discord.js').Guild} guild
+ * @param {string} name - Channel name to search for (e.g. 'announcements', 'general')
+ * @returns {import('discord.js').TextChannel|null}
+ */
+function findChannelByName(guild, name) {
+  return (
+    guild.channels.cache.find(c =>
+      c.isTextBased() &&
+      !c.isThread() &&
+      c.name.toLowerCase() === name.toLowerCase() &&
+      c.permissionsFor(guild.members.me)?.has('SendMessages')
+    ) ?? null
+  );
+}
+
+/**
+ * Send a payload to a list of channels, silently skipping any that fail.
+ * @param {Array<import('discord.js').TextChannel|null>} channels
+ * @param {object} payload - discord.js send payload
+ */
+async function broadcastToChannels(channels, payload) {
+  await Promise.allSettled(
+    channels
+      .filter(Boolean)
+      .map(ch => ch.send(payload).catch(err => logError(`broadcastToChannels [${ch.id}]`, err)))
+  );
+}
+
 // ─── Command handler ──────────────────────────────────────────────────────────
 async function handleLottery(interaction, db, client, updateBalance, targetGuild) {
   try {
@@ -102,6 +148,37 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
     const uniqueEntries = uniqueUserIds.length;
 
+    // ── Step 0: Create a live spin session ────────────────────────────────────
+    // Generate a short unique ID for this spin so the URL stays clean.
+    const spinId = crypto.randomBytes(6).toString('hex'); // e.g. "a3f9c2b1d4e5"
+
+    // Resolve display names up-front so the web page can show them immediately.
+    // We'll also use this map later for the Discord embeds.
+    const nameMap = new Map(); // userId → display name
+    await Promise.all(
+      uniqueUserIds.map(async uid => {
+        const name = await resolveUsername(client, uid);
+        nameMap.set(uid, name ?? `<@${uid}>`);
+      })
+    );
+
+    // Build the participant list for the web page.
+    const webParticipants = uniqueUserIds.map(uid => ({
+      userId:   uid,
+      username: nameMap.get(uid) ?? uid,
+      tickets:  participants.filter(p => p.user_id === uid).length,
+    }));
+
+    // Create the session and get the public URL (null if spin server not running).
+    let spinUrl = null;
+    if (_spinServer) {
+      try {
+        spinUrl = _spinServer.createSession(spinId, webParticipants);
+      } catch (err) {
+        logError('handleLottery: createSession', err);
+      }
+    }
+
     // ── Step 1: @everyone ping + initial countdown embed ─────────────────────
     const countdownEmbed = new EmbedBuilder()
       .setColor(0x5865F2)
@@ -109,7 +186,8 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       .setDescription(
         `@everyone\n\n` +
         `The wheel will spin in **3 minutes**! 🕐\n\n` +
-        `Get ready — a winner is about to be chosen from the **50 WIN LOTTERY**!`
+        `Get ready — a winner is about to be chosen from the **50 WIN LOTTERY**!` +
+        (spinUrl ? `\n\n🌐 **Watch live:** ${spinUrl}` : '')
       )
       .addFields(
         { name: '🎟️ Total Tickets',   value: `${totalTickets}`,  inline: true },
@@ -147,6 +225,9 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       channel = guildChannel;
     }
 
+    // Resolve the guild we're operating in (for multi-channel broadcast later).
+    const guild = targetGuild ?? interaction.guild ?? null;
+
     // ── Step 2: Countdown messages ────────────────────────────────────────────
     // Schedule: 3 min → 2 min → 1 min → 30 s → 10 s → 5 s → 4 s → 3 s → 2 s → 1 s
     const countdownSteps = [
@@ -163,6 +244,12 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
 
     for (const step of countdownSteps) {
       await sleep(step.waitMs);
+
+      // Push countdown event to live web page
+      if (_spinServer) {
+        try { _spinServer.pushEvent(spinId, { type: 'countdown', label: step.label }); } catch { /* non-fatal */ }
+      }
+
       try {
         await channel.send({
           embeds: [
@@ -180,6 +267,11 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     await sleep(1_000);
 
     // ── Step 3: Spinning wheel animation ─────────────────────────────────────
+    // Notify the web page that the spin has started.
+    if (_spinServer) {
+      try { _spinServer.pushEvent(spinId, { type: 'spinning' }); } catch { /* non-fatal */ }
+    }
+
     const spinFrames = ['🎡', '🎢', '🎠', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎮'];
     const spinDurationMs = 3_000;
     const frameIntervalMs = 100;
@@ -229,20 +321,24 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     // Award 50 coins to the winner.
     updateBalance(winnerId, 50);
 
-    // Resolve display names for all unique participants.
-    const nameMap = new Map(); // userId → display name
-    await Promise.all(
-      uniqueUserIds.map(async uid => {
-        const name = await resolveUsername(client, uid);
-        nameMap.set(uid, name ?? `<@${uid}>`);
-      })
-    );
-
     const winnerDisplayName = nameMap.get(winnerId) ?? `<@${winnerId}>`;
     const winnerTag = `${winnerDisplayName} (<@${winnerId}>)`;
 
     // Clear the wheel now that a winner has been chosen.
     clearLottery(db);
+
+    // Push winner event to live web page
+    if (_spinServer) {
+      try {
+        _spinServer.pushEvent(spinId, {
+          type:     'winner',
+          userId:   winnerId,
+          username: winnerDisplayName,
+        });
+      } catch { /* non-fatal */ }
+      // Schedule session cleanup after 5 minutes
+      try { _spinServer.closeSession(spinId, 5 * 60 * 1000); } catch { /* non-fatal */ }
+    }
 
     // ── Step 5: Live wheel display with all names + winner highlighted ────────
     const wheelLines = uniqueUserIds.map(uid => {
@@ -280,20 +376,42 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     const resultEmbed = new EmbedBuilder()
       .setColor(0x57F287)
       .setTitle('🎉 We Have a Winner!')
-      .setDescription(`🏆 Congratulations to **${winnerTag}** for winning the **50 WIN LOTTERY**!`)
+      .setDescription(
+        `🏆 Congratulations to **${winnerTag}** for winning the **50 WIN LOTTERY**!` +
+        (spinUrl ? `\n\n🌐 **Full results:** ${spinUrl}` : '')
+      )
       .addFields(
-        { name: '🪙 Prize',           value: '50 coins',         inline: true },
+        { name: '🪙 Prize',           value: '50 coins',             inline: true },
         { name: '🎟️ Winning Ticket',  value: `1 of ${totalTickets}`, inline: true },
       )
       .setTimestamp();
 
+    // Send the winner announcement to the main channel first.
     try {
       await channel.send({ content: `🎉 <@${winnerId}>`, embeds: [resultEmbed] });
     } catch (err) {
-      logError('handleLottery: final announcement', err);
+      logError('handleLottery: final announcement (main channel)', err);
     }
 
-    // ── Step 7: DM the winner ─────────────────────────────────────────────────
+    // ── Step 7: Broadcast result to #announcements and #general ──────────────
+    if (guild) {
+      const announcementsChannel = findChannelByName(guild, 'announcements');
+      const generalChannel       = findChannelByName(guild, 'general');
+
+      // Collect channels that are different from the main channel (avoid duplicates).
+      const broadcastTargets = [announcementsChannel, generalChannel].filter(
+        ch => ch && ch.id !== channel.id
+      );
+
+      if (broadcastTargets.length) {
+        await broadcastToChannels(broadcastTargets, {
+          content: `🎉 <@${winnerId}>`,
+          embeds:  [resultEmbed],
+        });
+      }
+    }
+
+    // ── Step 8: DM the winner ─────────────────────────────────────────────────
     try {
       const winnerUser = await client.users.fetch(winnerId);
       const dmEmbed = new EmbedBuilder()
@@ -301,7 +419,8 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         .setTitle('🎉 You Won the Lottery!')
         .setDescription(
           `Congratulations! You were picked as the winner of the **50 WIN LOTTERY** wheel!\n\n` +
-          `**🪙 50 coins** have been added to your balance.`
+          `**🪙 50 coins** have been added to your balance.` +
+          (spinUrl ? `\n\n🌐 **View the result:** ${spinUrl}` : '')
         )
         .setTimestamp();
 
@@ -320,4 +439,4 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
   }
 }
 
-module.exports = { commands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants, clearLottery };
+module.exports = { commands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants, clearLottery, setSpinServer };
