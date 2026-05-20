@@ -713,6 +713,22 @@ client.on('interactionCreate', async (interaction) => {
 
   const focused = interaction.options.getFocused(true);
 
+  // ── givecoin: server autocomplete ─────────────────────────────────────────
+  if (focused.name === 'server' && interaction.commandName === 'givecoin') {
+    const focusedValue = focused.value.toLowerCase();
+    try {
+      const choices = client.guilds.cache
+        .map(g => ({ name: `${g.name} (${g.id})`, value: g.id }))
+        .filter(c => c.name.toLowerCase().includes(focusedValue))
+        .slice(0, 25);
+      await interaction.respond(choices);
+    } catch (err) {
+      logError('autocomplete [givecoin:server]', err);
+      await interaction.respond([]);
+    }
+    return;
+  }
+
   // ── Server autocomplete (shared across all commands with a 'server' option) ──
   if (focused.name === 'server') {
     const focusedValue = focused.value.toLowerCase();
