@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const crypto = require('crypto');
 
 // ─── Consistent error logger ──────────────────────────────────────────────────
@@ -72,7 +72,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('spinwheel')
     .setDescription('Spin the lottery wheel and pick a random winner (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(true)
     .addStringOption(o =>
       o.setName('server')
