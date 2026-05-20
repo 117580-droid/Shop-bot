@@ -23,12 +23,36 @@ const { URL }   = require('url');
 const PORT = parseInt(process.env.SPIN_PORT ?? '3000', 10);
 
 // PUBLIC_URL is the externally reachable base URL of this service, e.g.
-// "https://my-bot.up.railway.app". If not set we fall back to a localhost URL
-// so the feature still works in local dev.
-const PUBLIC_URL = (process.env.RAILWAY_PUBLIC_DOMAIN
-  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-  : process.env.PUBLIC_URL ?? `http://localhost:${PORT}`
-).replace(/\/$/, '');
+// "https://my-bot.up.railway.app". Resolution order:
+//   1. RAILWAY_PUBLIC_DOMAIN — Railway injects this as the bare hostname
+//      (e.g. "my-bot.up.railway.app"). Strip any accidental scheme prefix
+//      before prepending https:// so we never produce "https://https://…".
+//   2. RAILWAY_STATIC_URL — older Railway variable that may already include
+//      the scheme; used as-is after stripping a trailing slash.
+//   3. PUBLIC_URL — explicit override for self-hosted / custom setups.
+//   4. http://localhost:<PORT> — local development fallback only.
+function resolvePublicUrl() {
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (railwayDomain) {
+    // Strip any scheme the variable might accidentally contain, then force https.
+    const bare = railwayDomain.replace(/^https?:\/\//, '');
+    return `https://${bare}`;
+  }
+
+  const railwayStatic = process.env.RAILWAY_STATIC_URL;
+  if (railwayStatic) {
+    return railwayStatic.replace(/\/$/, '');
+  }
+
+  const explicitPublic = process.env.PUBLIC_URL;
+  if (explicitPublic) {
+    return explicitPublic.replace(/\/$/, '');
+  }
+
+  return `http://localhost:${PORT}`;
+}
+
+const PUBLIC_URL = resolvePublicUrl();
 
 // ─── In-memory session store ──────────────────────────────────────────────────
 // spinId → { participants, events, sockets: Set<WebSocket>, timer }
