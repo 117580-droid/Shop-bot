@@ -395,7 +395,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('additem')
     .setDescription('Add a new item to the shop (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(true)
     .addStringOption(o => o.setName('name').setDescription('Item name').setRequired(true))
     .addStringOption(o => o.setName('description').setDescription('Item description').setRequired(true))
@@ -952,13 +951,16 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── /additem ──────────────────────────────────────────────────────────────
     if (commandName === 'additem') {
-      // Owner-only guard when used from DMs (no guild context means no member
-      // permissions to check, so fall back to the OWNER_ID env var).
-      if (!interaction.guild && (!OWNER_ID || user.id !== OWNER_ID)) {
-        return await safeReply(interaction, {
-          content: '❌ Only the bot owner can use this command from DMs.',
-          ephemeral: true,
-        });
+      // Allow the bot owner unconditionally; otherwise require Administrator.
+      const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+      if (!isOwner) {
+        const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+        if (!isAdmin) {
+          return await safeReply(interaction, {
+            content: '❌ Only the bot owner or a server administrator can use this command.',
+            ephemeral: true,
+          });
+        }
       }
 
       // Resolve target guild: use current guild if in a server, otherwise
