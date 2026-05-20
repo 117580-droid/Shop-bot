@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎡 Live Lottery Wheel</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --accent:    #5865f2;
+      --gold:      #fee75c;
+      --green:     #57f287;
+      --pink:      #eb459e;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --radius:    12px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      line-height: 1.5;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 48px;
+      gap: 24px;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
+    header {
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: clamp(1.5rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    /* ── Status banner ────────────────────────────────────────────────────── */
+    #status-banner {
+      width: 100%;
+      max-width: 640px;
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      text-align: center;
+      font-size: 1.05rem;
+      font-weight: 600;
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    #status-banner.connecting  { border-color: var(--muted);  color: var(--muted); }
+    #status-banner.waiting     { border-color: var(--accent);  color: var(--accent); }
+    #status-banner.countdown   { border-color: var(--pink);    color: var(--pink); }
+    #status-banner.spinning    { border-color: var(--gold);    color: var(--gold); }
+    #status-banner.winner      { border-color: var(--green);   color: var(--green); background: #0d2818; }
+    #status-banner.expired     { border-color: var(--muted);   color: var(--muted); }
+
+    /* ── Wheel canvas ─────────────────────────────────────────────────────── */
+    #wheel-wrap {
+      position: relative;
+      width: min(420px, 90vw);
+      height: min(420px, 90vw);
+    }
+
+    #wheel-canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      display: block;
+    }
+
+    /* Pointer arrow */
+    #wheel-wrap::after {
+      content: '▼';
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 2rem;
+      color: var(--gold);
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+      pointer-events: none;
+    }
+
+    /* ── Stats row ────────────────────────────────────────────────────────── */
+    #stats {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 110px;
+    }
+
+    .stat-card .label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-card .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--gold);
+      margin-top: 2px;
+    }
+
+    /* ── Countdown display ────────────────────────────────────────────────── */
+    #countdown-display {
+      font-size: clamp(2rem, 8vw, 4rem);
+      font-weight: 800;
+      color: var(--pink);
+      letter-spacing: -1px;
+      min-height: 1.2em;
+      text-align: center;
+      transition: opacity 0.2s;
+    }
+
+    /* ── Winner card ──────────────────────────────────────────────────────── */
+    #winner-card {
+      display: none;
+      width: 100%;
+      max-width: 640px;
+      background: linear-gradient(135deg, #0d2818 0%, #0a1f2e 100%);
+      border: 2px solid var(--green);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    #winner-card.visible { display: block; }
+
+    #winner-card .trophy { font-size: 3rem; }
+    #winner-card h2 { font-size: 1.4rem; color: var(--green); margin: 8px 0 4px; }
+    #winner-card .winner-name { font-size: 1.8rem; font-weight: 800; color: var(--gold); }
+    #winner-card .prize { color: var(--muted); margin-top: 8px; font-size: 0.95rem; }
+
+    @keyframes pop-in {
+      from { transform: scale(0.7); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    /* ── Participants list ────────────────────────────────────────────────── */
+    #participants-section {
+      width: 100%;
+      max-width: 640px;
+    }
+
+    #participants-section h3 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    #participants-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    #participants-list::-webkit-scrollbar { width: 4px; }
+    #participants-list::-webkit-scrollbar-track { background: transparent; }
+    #participants-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .participant-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      transition: border-color 0.3s, background 0.3s;
+    }
+
+    .participant-row.is-winner {
+      border-color: var(--green);
+      background: #0d2818;
+    }
+
+    .participant-row .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .participant-row .name {
+      flex: 1;
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+
+    .participant-row.is-winner .name::after {
+      content: ' 🏆';
+    }
+
+    .participant-row .tickets {
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: var(--bg);
+      border-radius: 4px;
+      padding: 2px 7px;
+    }
+
+    .participant-row .chance {
+      font-size: 0.8rem;
+      color: var(--accent);
+      min-width: 42px;
+      text-align: right;
+    }
+
+    /* ── Spin animation overlay ───────────────────────────────────────────── */
+    #spin-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    #spin-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #spin-overlay .spin-emoji {
+      font-size: clamp(5rem, 20vw, 10rem);
+      animation: spin-rotate 0.3s linear infinite;
+    }
+
+    @keyframes spin-rotate {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* ── Footer ───────────────────────────────────────────────────────────── */
+    footer {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🎡 Live Lottery Wheel</h1>
+    <p>Watch the spin happen in real time</p>
+  </header>
+
+  <div id="status-banner" class="connecting">⏳ Connecting…</div>
+
+  <div id="wheel-wrap">
+    <canvas id="wheel-canvas" width="420" height="420"></canvas>
+  </div>
+
+  <div id="stats">
+    <div class="stat-card">
+      <div class="label">Participants</div>
+      <div class="value" id="stat-participants">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Tickets</div>
+      <div class="value" id="stat-tickets">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Prize</div>
+      <div class="value">🪙 50</div>
+    </div>
+  </div>
+
+  <div id="countdown-display"></div>
+
+  <div id="winner-card">
+    <div class="trophy">🏆</div>
+    <h2>We Have a Winner!</h2>
+    <div class="winner-name" id="winner-name-display"></div>
+    <div class="prize">🪙 50 coins awarded</div>
+  </div>
+
+  <div id="participants-section">
+    <h3>Participants</h3>
+    <div id="participants-list"></div>
+  </div>
+
+  <div id="spin-overlay">
+    <div class="spin-emoji">🎡</div>
+  </div>
+
+  <footer>
+    This page auto-updates in real time via WebSocket. It will expire ~5 minutes after the spin completes.
+  </footer>
+
+  <script>
+    // ── Palette for wheel segments ──────────────────────────────────────────
+    const PALETTE = [
+      '#5865f2','#eb459e','#fee75c','#57f287','#ed4245',
+      '#3ba55c','#faa61a','#00b0f4','#9b59b6','#e67e22',
+      '#1abc9c','#e74c3c','#3498db','#f39c12','#2ecc71',
+    ];
+
+    // ── State ───────────────────────────────────────────────────────────────
+    let participants = [];   // [{userId, username, tickets}]
+    let totalTickets = 0;
+    let winnerId     = null;
+    let spinAngle    = 0;    // current rotation in radians
+    let spinVelocity = 0;    // radians per frame
+    let rafId        = null;
+
+    // ── DOM refs ────────────────────────────────────────────────────────────
+    const canvas        = document.getElementById('wheel-canvas');
+    const ctx           = canvas.getContext('2d');
+    const statusBanner  = document.getElementById('status-banner');
+    const countdownEl   = document.getElementById('countdown-display');
+    const winnerCard    = document.getElementById('winner-card');
+    const winnerNameEl  = document.getElementById('winner-name-display');
+    const participantsList = document.getElementById('participants-list');
+    const spinOverlay   = document.getElementById('spin-overlay');
+    const statParticipants = document.getElementById('stat-participants');
+    const statTickets      = document.getElementById('stat-tickets');
+
+    // ── Wheel drawing ───────────────────────────────────────────────────────
+    function drawWheel(angle) {
+      const W = canvas.width;
+      const H = canvas.height;
+      const cx = W / 2;
+      const cy = H / 2;
+      const r  = Math.min(cx, cy) - 4;
+
+      ctx.clearRect(0, 0, W, H);
+
+      if (!participants.length) {
+        ctx.fillStyle = '#30363d';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#8b949e';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Waiting…', cx, cy);
+        return;
+      }
+
+      const slices = buildSlices();
+      let startAngle = angle;
+
+      for (let i = 0; i < slices.length; i++) {
+        const slice = slices[i];
+        const endAngle = startAngle + slice.arc;
+        const color = PALETTE[i % PALETTE.length];
+
+        // Segment fill
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = '#0d1117';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Label
+        const midAngle = startAngle + slice.arc / 2;
+        const labelR   = r * 0.65;
+        const lx = cx + Math.cos(midAngle) * labelR;
+        const ly = cy + Math.sin(midAngle) * labelR;
+
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(midAngle + Math.PI / 2);
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(10, Math.min(14, 200 / slices.length))}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Truncate long names
+        let label = slice.username;
+        if (label.length > 12) label = label.slice(0, 11) + '…';
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+
+        startAngle = endAngle;
+      }
+
+      // Centre circle
+      ctx.beginPath();
+      ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+      ctx.fillStyle = '#0d1117';
+      ctx.fill();
+      ctx.strokeStyle = '#fee75c';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    function buildSlices() {
+      // One slice per unique participant, sized by ticket count
+      return participants.map(p => ({
+        username: p.username,
+        userId:   p.userId,
+        arc:      (p.tickets / totalTickets) * Math.PI * 2,
+      }));
+    }
+
+    // ── Spin animation ──────────────────────────────────────────────────────
+    function startSpinAnimation() {
+      spinVelocity = 0.35 + Math.random() * 0.15; // ~20–30 RPM
+      spinOverlay.classList.add('active');
+
+      function frame() {
+        spinAngle    += spinVelocity;
+        spinVelocity *= 0.9985; // very gentle deceleration — bot controls timing
+        drawWheel(spinAngle);
+        rafId = requestAnimationFrame(frame);
+      }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function stopSpinAnimation(targetUserId) {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      spinOverlay.classList.remove('active');
+
+      // Snap the wheel so the winner's segment is under the pointer (top = -π/2)
+      if (targetUserId && participants.length) {
+        const slices = buildSlices();
+        let cumulative = 0;
+        for (const slice of slices) {
+          if (slice.userId === targetUserId) {
+            const midFraction = cumulative + slice.arc / 2;
+            // We want midFraction to land at the top pointer (-π/2)
+            spinAngle = -Math.PI / 2 - midFraction;
+            break;
+          }
+          cumulative += slice.arc;
+        }
+      }
+      drawWheel(spinAngle);
+    }
+
+    // ── Participant list rendering ──────────────────────────────────────────
+    function renderParticipants() {
+      participantsList.innerHTML = '';
+      participants.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'participant-row' + (p.userId === winnerId ? ' is-winner' : '');
+        row.dataset.userId = p.userId;
+
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        dot.style.background = PALETTE[i % PALETTE.length];
+
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = p.username;
+
+        const tickets = document.createElement('div');
+        tickets.className = 'tickets';
+        tickets.textContent = `${p.tickets} ticket${p.tickets !== 1 ? 's' : ''}`;
+
+        const chance = document.createElement('div');
+        chance.className = 'chance';
+        const pct = totalTickets > 0 ? ((p.tickets / totalTickets) * 100).toFixed(1) : '0.0';
+        chance.textContent = `${pct}%`;
+
+        row.append(dot, name, tickets, chance);
+        participantsList.appendChild(row);
+      });
+    }
+
+    // ── Status helpers ──────────────────────────────────────────────────────
+    function setStatus(cls, text) {
+      statusBanner.className = cls;
+      statusBanner.textContent = text;
+    }
+
+    // ── WebSocket connection ────────────────────────────────────────────────
+    const spinId  = location.pathname.split('/spin/')[1];
+    const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl   = `${wsProto}//${location.host}/spin/${encodeURIComponent(spinId)}/ws`;
+
+    let ws;
+    let reconnectDelay = 1000;
+
+    function connect() {
+      setStatus('connecting', '⏳ Connecting…');
+      ws = new WebSocket(wsUrl);
+
+      ws.addEventListener('open', () => {
+        reconnectDelay = 1000;
+        setStatus('waiting', '🎡 Connected — waiting for spin to start…');
+      });
+
+      ws.addEventListener('message', (evt) => {
+        let msg;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+        handleEvent(msg);
+      });
+
+      ws.addEventListener('close', (evt) => {
+        if (evt.code === 1001) {
+          // Session expired — don't reconnect
+          setStatus('expired', '⌛ This spin session has expired.');
+          return;
+        }
+        // Reconnect with backoff
+        setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+      });
+
+      ws.addEventListener('error', () => {
+        // close event will fire next and handle reconnect
+      });
+    }
+
+    // ── Event handler ───────────────────────────────────────────────────────
+    function handleEvent(msg) {
+      switch (msg.type) {
+
+        case 'init': {
+          participants = msg.participants ?? [];
+          totalTickets = participants.reduce((s, p) => s + p.tickets, 0);
+          statParticipants.textContent = participants.length;
+          statTickets.textContent      = totalTickets;
+          renderParticipants();
+          drawWheel(spinAngle);
+          setStatus('waiting', '🎡 Wheel loaded — spin starting soon…');
+          break;
+        }
+
+        case 'countdown': {
+          countdownEl.textContent = msg.label ?? '';
+          setStatus('countdown', `⏳ Spinning in ${msg.label}…`);
+          break;
+        }
+
+        case 'spinning': {
+          countdownEl.textContent = '';
+          setStatus('spinning', '🎡 The wheel is spinning!');
+          startSpinAnimation();
+          break;
+        }
+
+        case 'winner': {
+          winnerId = msg.userId;
+          stopSpinAnimation(msg.userId);
+          countdownEl.textContent = '';
+
+          // Highlight winner in list
+          renderParticipants();
+          document.querySelector(`.participant-row[data-user-id="${msg.userId}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+          // Show winner card
+          winnerNameEl.textContent = msg.username ?? 'Unknown';
+          winnerCard.classList.add('visible');
+          setStatus('winner', `🏆 Winner: ${msg.username}!`);
+          break;
+        }
+
+        case 'expired': {
+          setStatus('expired', '⌛ This spin session has expired.');
+          break;
+        }
+
+        case 'error': {
+          setStatus('expired', `❌ ${msg.message ?? 'An error occurred.'}`);
+          break;
+        }
+      }
+    }
+
+    // ── Boot ────────────────────────────────────────────────────────────────
+    drawWheel(0); // draw empty wheel immediately
+    connect();
+  </script>
+</body>
+</html>
