@@ -438,7 +438,6 @@ const commands = [
     .setName('setitem')
     .setDescription('Set the item/character to be guessed (Admin only)')
     .setDMPermission(true)
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName('name')
         .setDescription('The item or character name players must guess')
