@@ -438,7 +438,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('givecoin')
     .setDescription('Give coins to a user (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(true)
     .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
     .addIntegerOption(o => o.setName('amount').setDescription('Amount of coins').setRequired(true))
