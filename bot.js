@@ -4,8 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
-const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, setSpinServer } = require('./lottery.js');
-const spinServer = require('./spinServer.js');
+const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 
@@ -645,19 +644,6 @@ client.once('ready', async () => {
   // same channel-overwrite mechanism used by the /mute command.
   setMuteExecutor(executeMute);
   log('INFO', 'Anti-spam mute executor registered.');
-
-  // ── Start the live spin web server ────────────────────────────────────────
-  // Serves the real-time wheel page and WebSocket event stream for /spinwheel.
-  // If it fails to start (e.g. port already in use) the bot continues normally
-  // — the live URL feature will simply be omitted from Discord messages.
-  try {
-    await spinServer.start();
-    setSpinServer(spinServer);
-    log('INFO', `Spin server started — public URL: ${spinServer.PUBLIC_URL}`);
-  } catch (err) {
-    logError('ready: spin server start', err);
-    log('WARN', 'Spin server failed to start — live wheel URLs will be disabled.');
-  }
 
   await registerCommands();
 
