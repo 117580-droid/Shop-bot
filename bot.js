@@ -1257,8 +1257,11 @@ client.on('interactionCreate', async (interaction) => {
           new EmbedBuilder()
             .setColor(0x57F287)
             .setTitle('🪙 Coins Given')
-            .setDescription(`Gave **${amount} coins** to ${target}. They now have **${newBal} coins**.`)
-            .addFields({ name: 'Server', value: giveGuild.name, inline: true })
+            .setDescription(`Gave **${amount} coins** to ${target}.`)
+            .addFields(
+              { name: 'Server',      value: giveGuild.name,        inline: true },
+              { name: 'New Balance', value: `🪙 ${newBal} coins`, inline: true },
+            )
             .setTimestamp()
         ]
       });
