@@ -1,21 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const crypto = require('crypto');
 
 // ─── Consistent error logger ──────────────────────────────────────────────────
 function logError(context, err) {
   console.error(`[ERROR] lottery/${context}: ${err?.message ?? err}`);
-}
-
-// ─── Spin server reference (injected via setSpinServer) ───────────────────────
-let _spinServer = null;
-
-/**
- * Inject the spinServer module so lottery.js can create sessions and push events.
- * Called once from bot.js after the spin server has started.
- * @param {object} spinServer - The spinServer module export.
- */
-function setSpinServer(spinServer) {
-  _spinServer = spinServer;
 }
 
 // ─── Safe interaction reply ───────────────────────────────────────────────────
@@ -147,12 +134,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
     const uniqueEntries = uniqueUserIds.length;
 
-    // ── Step 0: Create a live spin session ────────────────────────────────────
-    // Generate a short unique ID for this spin so the URL stays clean.
-    const spinId = crypto.randomBytes(6).toString('hex'); // e.g. "a3f9c2b1d4e5"
-
-    // Resolve display names up-front so the web page can show them immediately.
-    // We'll also use this map later for the Discord embeds.
+    // ── Step 0: Resolve display names ─────────────────────────────────────────
     const nameMap = new Map(); // userId → display name
     await Promise.all(
       uniqueUserIds.map(async uid => {
@@ -161,23 +143,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       })
     );
 
-    // Build the participant list for the web page.
-    const webParticipants = uniqueUserIds.map(uid => ({
-      userId:   uid,
-      username: nameMap.get(uid) ?? uid,
-      tickets:  participants.filter(p => p.user_id === uid).length,
-    }));
-
-    // Create the session and get the public URL (null if spin server not running).
-    let spinUrl = null;
-    if (_spinServer) {
-      try {
-        spinUrl = _spinServer.createSession(spinId, webParticipants);
-      } catch (err) {
-        logError('handleLottery: createSession', err);
-      }
-    }
-
     // ── Step 1: @everyone ping + initial countdown embed ─────────────────────
     const countdownEmbed = new EmbedBuilder()
       .setColor(0x5865F2)
@@ -185,8 +150,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       .setDescription(
         `@everyone\n\n` +
         `The wheel will spin in **3 minutes**! 🕐\n\n` +
-        `Get ready — a winner is about to be chosen from the **50 WIN LOTTERY**!` +
-        (spinUrl ? `\n\n🌐 **Watch live:** ${spinUrl}` : '')
+        `Get ready — a winner is about to be chosen from the **50 WIN LOTTERY**!`
       )
       .addFields(
         { name: '🎟️ Total Tickets',   value: `${totalTickets}`,  inline: true },
@@ -244,11 +208,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     for (const step of countdownSteps) {
       await sleep(step.waitMs);
 
-      // Push countdown event to live web page
-      if (_spinServer) {
-        try { _spinServer.pushEvent(spinId, { type: 'countdown', label: step.label }); } catch { /* non-fatal */ }
-      }
-
       try {
         await channel.send({
           embeds: [
@@ -266,11 +225,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     await sleep(1_000);
 
     // ── Step 3: Spinning wheel animation ─────────────────────────────────────
-    // Notify the web page that the spin has started.
-    if (_spinServer) {
-      try { _spinServer.pushEvent(spinId, { type: 'spinning' }); } catch { /* non-fatal */ }
-    }
-
     const spinFrames = ['🎡', '🎢', '🎠', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎮'];
     const spinDurationMs = 3_000;
     const frameIntervalMs = 100;
@@ -326,19 +280,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     // Clear the wheel now that a winner has been chosen.
     clearLottery(db);
 
-    // Push winner event to live web page
-    if (_spinServer) {
-      try {
-        _spinServer.pushEvent(spinId, {
-          type:     'winner',
-          userId:   winnerId,
-          username: winnerDisplayName,
-        });
-      } catch { /* non-fatal */ }
-      // Schedule session cleanup after 5 minutes
-      try { _spinServer.closeSession(spinId, 5 * 60 * 1000); } catch { /* non-fatal */ }
-    }
-
     // ── Step 5: Live wheel display with all names + winner highlighted ────────
     const wheelLines = uniqueUserIds.map(uid => {
       const name    = nameMap.get(uid) ?? `<@${uid}>`;
@@ -376,8 +317,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       .setColor(0x57F287)
       .setTitle('🎉 We Have a Winner!')
       .setDescription(
-        `🏆 Congratulations to **${winnerTag}** for winning the **50 WIN LOTTERY**!` +
-        (spinUrl ? `\n\n🌐 **Full results:** ${spinUrl}` : '')
+        `🏆 Congratulations to **${winnerTag}** for winning the **50 WIN LOTTERY**!`
       )
       .addFields(
         { name: '🪙 Prize',           value: '50 coins',             inline: true },
@@ -418,8 +358,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         .setTitle('🎉 You Won the Lottery!')
         .setDescription(
           `Congratulations! You were picked as the winner of the **50 WIN LOTTERY** wheel!\n\n` +
-          `**🪙 50 coins** have been added to your balance.` +
-          (spinUrl ? `\n\n🌐 **View the result:** ${spinUrl}` : '')
+          `**🪙 50 coins** have been added to your balance.`
         )
         .setTimestamp();
 
@@ -438,4 +377,4 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
   }
 }
 
-module.exports = { commands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants, clearLottery, setSpinServer };
+module.exports = { commands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants, clearLottery };
