@@ -414,9 +414,16 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('removeitem')
-    .setDescription('Remove an item from the shop (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDescription('Remove an item from the shop (Owner only)')
+    .setDMPermission(true)
     .addStringOption(o => o.setName('name').setDescription('Item name to remove').setRequired(true).setAutocomplete(true)),
+
+  new SlashCommandBuilder()
+    .setName('removecoin')
+    .setDescription('Remove coins from a user (Owner only)')
+    .setDMPermission(true)
+    .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
+    .addIntegerOption(o => o.setName('amount').setDescription('Amount of coins to remove').setRequired(true).setMinValue(1)),
 
   new SlashCommandBuilder()
     .setName('shop')
@@ -1032,6 +1039,14 @@ client.on('interactionCreate', async (interaction) => {
 
     // ── /removeitem ───────────────────────────────────────────────────────────
     if (commandName === 'removeitem') {
+      // Owner-only guard
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
       const name = (interaction.options.getString('name') ?? '').trim().slice(0, 100);
 
       if (!name) {
@@ -1044,10 +1059,6 @@ client.on('interactionCreate', async (interaction) => {
         return await safeReply(interaction, { content: `❌ No item found with name **${name}**.`, ephemeral: true });
       }
 
-      if (item.is_protected === 1) {
-        return await safeReply(interaction, { content: '❌ This item is protected and cannot be deleted.', ephemeral: true });
-      }
-
       try {
         db.prepare('DELETE FROM shop_items WHERE id = ?').run(item.id);
       } catch (err) {
@@ -1055,12 +1066,65 @@ client.on('interactionCreate', async (interaction) => {
         return await safeReply(interaction, { content: '❌ Failed to remove item due to a database error.', ephemeral: true });
       }
 
+      log('INFO', `removeitem: owner ${user.username} (${user.id}) removed shop item "${item.name}" (id=${item.id}).`);
       return await safeReply(interaction, {
         embeds: [
           new EmbedBuilder()
             .setColor(0xED4245)
             .setTitle('🗑️ Item Removed')
             .setDescription(`**${item.name}** has been removed from the shop.`)
+            .setFooter({ text: `Removed by ${user.username}` })
+            .setTimestamp()
+        ]
+      });
+    }
+
+    // ── /removecoin ───────────────────────────────────────────────────────────
+    if (commandName === 'removecoin') {
+      // Owner-only guard
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
+      const target = interaction.options.getUser('user');
+      const amount = interaction.options.getInteger('amount');
+
+      if (!target) {
+        return await safeReply(interaction, { content: '❌ Could not resolve the target user.', ephemeral: true });
+      }
+
+      const currentBalance = getBalance(target.id);
+
+      // Clamp removal so balance never goes below zero
+      const actualRemoval = Math.min(amount, currentBalance);
+
+      if (actualRemoval <= 0) {
+        return await safeReply(interaction, {
+          content: `❌ **${target.username}** has no coins to remove (current balance: **${currentBalance}**).`,
+          ephemeral: true,
+        });
+      }
+
+      updateBalance(target.id, -actualRemoval);
+      const newBalance = getBalance(target.id);
+
+      log('INFO', `removecoin: owner ${user.username} (${user.id}) removed ${actualRemoval} coins from ${target.username} (${target.id}). New balance: ${newBalance}.`);
+
+      return await safeReply(interaction, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xED4245)
+            .setTitle('🪙 Coins Removed')
+            .setDescription(`Removed **${actualRemoval} coins** from ${target}.`)
+            .addFields(
+              { name: 'Previous Balance', value: `🪙 ${currentBalance} coins`, inline: true },
+              { name: 'Removed',          value: `🪙 ${actualRemoval} coins`,  inline: true },
+              { name: 'New Balance',      value: `🪙 ${newBalance} coins`,     inline: true },
+            )
+            .setFooter({ text: `Removed by ${user.username}` })
             .setTimestamp()
         ]
       });
