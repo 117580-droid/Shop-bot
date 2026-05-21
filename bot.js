@@ -217,11 +217,6 @@ try {
       reason       TEXT    NOT NULL,
       created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-
-    CREATE TABLE IF NOT EXISTS daily_claims (
-      user_id    TEXT    PRIMARY KEY,
-      last_claim INTEGER NOT NULL DEFAULT 0  -- Unix timestamp (ms) of last claim
-    );
   `);
   log('INFO', 'Database schema initialised successfully.');
 } catch (err) {
@@ -468,10 +463,6 @@ const commands = [
         .setMinValue(1)
         .setMaxValue(25)
     ),
-
-  new SlashCommandBuilder()
-    .setName('dailycoins')
-    .setDescription('Claim your free daily coins (once every 24 hours)'),
 
   new SlashCommandBuilder()
     .setName('ban')
@@ -1380,82 +1371,6 @@ client.on('interactionCreate', async (interaction) => {
         logError('leaderboard: fetchReply for tracking', err);
       }
       return;
-    }
-
-    // ── /dailycoins ───────────────────────────────────────────────────────────
-    if (commandName === 'dailycoins') {
-      const DAILY_AMOUNT   = 10;
-      const COOLDOWN_MS    = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-      const now            = Date.now();
-
-      // Fetch the user's last claim timestamp from the database
-      let lastClaim = 0;
-      try {
-        const row = db.prepare('SELECT last_claim FROM daily_claims WHERE user_id = ?').get(user.id);
-        if (row) lastClaim = row.last_claim;
-      } catch (err) {
-        logError('dailycoins: DB select', err);
-        return await safeReply(interaction, {
-          content: '❌ Failed to check your daily claim due to a database error. Please try again.',
-          ephemeral: true,
-        });
-      }
-
-      const elapsed   = now - lastClaim;
-      const remaining = COOLDOWN_MS - elapsed;
-
-      // Still within the 24-hour cooldown window
-      if (remaining > 0) {
-        const nextClaimTimestamp = Math.floor((lastClaim + COOLDOWN_MS) / 1000);
-        return await safeReply(interaction, {
-          embeds: [
-            new EmbedBuilder()
-              .setColor(0xED4245)
-              .setTitle('⏳ Already Claimed')
-              .setDescription(`You have already claimed your daily coins!\nCome back <t:${nextClaimTimestamp}:R> to claim again.`)
-              .addFields({ name: 'Next Claim', value: `<t:${nextClaimTimestamp}:F>` })
-              .setFooter({ text: user.username })
-              .setTimestamp()
-          ],
-          ephemeral: true,
-        });
-      }
-
-      // Grant the coins and record the claim time
-      try {
-        updateBalance(user.id, DAILY_AMOUNT);
-        db.prepare(`
-          INSERT INTO daily_claims (user_id, last_claim) VALUES (?, ?)
-          ON CONFLICT(user_id) DO UPDATE SET last_claim = ?
-        `).run(user.id, now, now);
-      } catch (err) {
-        logError('dailycoins: DB upsert', err);
-        return await safeReply(interaction, {
-          content: '❌ Failed to grant your daily coins due to a database error. Please try again.',
-          ephemeral: true,
-        });
-      }
-
-      const newBalance         = getBalance(user.id);
-      const nextClaimTimestamp = Math.floor((now + COOLDOWN_MS) / 1000);
-
-      log('INFO', `dailycoins: granted ${DAILY_AMOUNT} coins to ${user.username} (${user.id}). New balance: ${newBalance}.`);
-
-      return await safeReply(interaction, {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x57F287)
-            .setTitle('🪙 Daily Coins Claimed!')
-            .setDescription(`You received **${DAILY_AMOUNT} coins**! Come back tomorrow for more.`)
-            .addFields(
-              { name: 'Coins Received', value: `🪙 ${DAILY_AMOUNT}`,          inline: true },
-              { name: 'New Balance',    value: `🪙 ${newBalance} coins`,       inline: true },
-              { name: 'Next Claim',     value: `<t:${nextClaimTimestamp}:R>`,  inline: true },
-            )
-            .setFooter({ text: user.username })
-            .setTimestamp()
-        ],
-      });
     }
 
     // ── /clan ─────────────────────────────────────────────────────────────────
