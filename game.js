@@ -60,7 +60,7 @@ const POI_IMAGES = {
   'Weeping Woods': `${POI_IMG_BASE}weeping-woods.svg`,
   // ── Chapter 3 ──────────────────────────────────────────────────────────────
   'Camp Cuddle': `${POI_IMG_BASE}camp-cuddle.svg`,
-  "Chonker's Speedway": POI_FALLBACK, // → pois/chonkers-speedway.png
+  "Chonker's Speedway": `${POI_IMG_BASE}chonkers-speedway.svg`,
   'Condo Canyon': `${POI_IMG_BASE}condo-canyon.svg`,
   'Coney Crossroads': `${POI_IMG_BASE}coney-crossroads.svg`,
   'Daily Bugle': `${POI_IMG_BASE}daily-bugle.svg`,
