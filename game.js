@@ -1,213 +1,171 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 // ─── Fortnite POIs with images ────────────────────────────────────────────────
-// Images sourced from the Fortnite Fandom wiki (static.wikia.nocookie.net) and
-// the fortniteapi.io media CDN — both serve direct PNG/JPG files with no auth,
-// no redirects, and stable URLs that Discord can embed without issue.
+// Individual POI images are hosted in the /pois folder on GitHub and served via
+// the raw.githubusercontent.com CDN. Each key maps to a direct PNG URL using
+// the format:
+//   https://raw.githubusercontent.com/117580-droid/Shop-bot/main/pois/{poi-name}.png
+// where {poi-name} is the POI name lowercased with spaces replaced by hyphens
+// (apostrophes removed). Example: "Chonker's Speedway" → "chonkers-speedway.png"
 //
-// Fallback: official Fortnite island overview used when a POI has no image.
+// To activate an image for a POI:
+//   1. Upload the PNG to the /pois folder on GitHub with the correct filename.
+//   2. Replace the POI_FALLBACK value for that entry below with:
+//        `${POI_IMG_BASE}{poi-name}.png`
+//
+// Fallback: generic Fortnite island image used when a POI has no dedicated image yet.
 const POI_FALLBACK = 'https://cdn2.unrealengine.com/Fortnite/fortnite-game/battleroyalenews/v53/BR05_MOTD_Rifttogo-256x256-3bd010b63911f314abb0bba893a01dc49e1eec3c.png';
+
+// Base URL for POI images hosted in the /pois folder on GitHub.
+// Usage: `${POI_IMG_BASE}{poi-name}.png`  (name lowercased, spaces → hyphens, apostrophes removed)
+const POI_IMG_BASE = 'https://raw.githubusercontent.com/117580-droid/Shop-bot/main/pois/';
 
 const POI_IMAGES = {
   // ── Chapter 1 ──────────────────────────────────────────────────────────────
-  'Tilted Towers':  POI_FALLBACK,
-  'Dusty Depot':    POI_FALLBACK,
-  'Dusty Divot':    POI_FALLBACK,
-  'Loot Lake':      POI_FALLBACK,
-  'Pleasant Park':  POI_FALLBACK,
-  'Retail Row':     POI_FALLBACK,
-  'Salty Springs':  POI_FALLBACK,
-  'Fatal Fields':   POI_FALLBACK,
-  'Haunted Hills':  POI_FALLBACK,
-  'Snobby Shores':  POI_FALLBACK,
-  'Tomato Town':    POI_FALLBACK,
-  'Tomato Temple':  POI_FALLBACK,
-  'Greasy Grove':   POI_FALLBACK,
-  'Flush Factory':  POI_FALLBACK,
-  'Wailing Woods':  POI_FALLBACK,
-  'Anarchy Acres':  POI_FALLBACK,
-  'Junk Junction':  POI_FALLBACK,
-  'Lonely Lodge':   POI_FALLBACK,
-  'Lucky Landing':  POI_FALLBACK,
-  'Lazy Links':     POI_FALLBACK,
-  'Paradise Palms': POI_FALLBACK,
-  'Risky Reels':    POI_FALLBACK,
-  'Leaky Lake':     POI_FALLBACK,
-  'Sunny Steps':    POI_FALLBACK,
-  'Frosty Flights': POI_FALLBACK,
-  'Polar Peak':     POI_FALLBACK,
-  'Happy Hamlet':   POI_FALLBACK,
-  'Shifty Shafts':  POI_FALLBACK,
-  'Moisty Mire':    POI_FALLBACK,
+  'Anarchy Acres':  POI_FALLBACK, // → pois/anarchy-acres.png
+  'Dusty Depot':    POI_FALLBACK, // → pois/dusty-depot.png
+  'Fatal Fields':   POI_FALLBACK, // → pois/fatal-fields.png
+  'Flush Factory':  POI_FALLBACK, // → pois/flush-factory.png
+  'Greasy Grove':   POI_FALLBACK, // → pois/greasy-grove.png
+  'Haunted Hills':  POI_FALLBACK, // → pois/haunted-hills.png
+  'Junk Junction':  POI_FALLBACK, // → pois/junk-junction.png
+  'Lazy Links':     POI_FALLBACK, // → pois/lazy-links.png
+  'Lonely Lodge':   POI_FALLBACK, // → pois/lonely-lodge.png
+  'Loot Lake':      POI_FALLBACK, // → pois/loot-lake.png
+  'Lucky Landing':  POI_FALLBACK, // → pois/lucky-landing.png
+  'Moisty Mire':    POI_FALLBACK, // → pois/moisty-mire.png
+  'Pleasant Park':  POI_FALLBACK, // → pois/pleasant-park.png
+  'Retail Row':     POI_FALLBACK, // → pois/retail-row.png
+  'Risky Reels':    POI_FALLBACK, // → pois/risky-reels.png
+  'Salty Springs':  POI_FALLBACK, // → pois/salty-springs.png
+  'Shifty Shafts':  POI_FALLBACK, // → pois/shifty-shafts.png
+  'Snobby Shores':  POI_FALLBACK, // → pois/snobby-shores.png
+  'Tilted Towers':  POI_FALLBACK, // → pois/tilted-towers.png
+  'Tomato Town':    POI_FALLBACK, // → pois/tomato-town.png
+  'Wailing Woods':  POI_FALLBACK, // → pois/wailing-woods.png
   // ── Chapter 2 ──────────────────────────────────────────────────────────────
-  'Sweaty Sands':      POI_FALLBACK,
-  'Dirty Docks':       POI_FALLBACK,
-  'Misty Meadows':     POI_FALLBACK,
-  'Lazy Lake':         POI_FALLBACK,
-  'Coral Castle':      POI_FALLBACK,
-  'Catty Corner':      POI_FALLBACK,
-  'Craggy Cliffs':     POI_FALLBACK,
-  'Frenzy Farm':       POI_FALLBACK,
-  'Holly Hedges':      POI_FALLBACK,
-  'Weeping Woods':     POI_FALLBACK,
-  'Slurpy Swamp':      POI_FALLBACK,
-  'Steamy Stacks':     POI_FALLBACK,
-  'The Authority':     POI_FALLBACK,
-  'The Agency':        POI_FALLBACK,
-  'The Yacht':         POI_FALLBACK,
-  'The Rig':           POI_FALLBACK,
-  'The Shark':         POI_FALLBACK,
-  'Salty Towers':      POI_FALLBACK,
-  'Colossal Crops':    POI_FALLBACK,
-  'Boney Burbs':       POI_FALLBACK,
-  'Believer Beach':    POI_FALLBACK,
-  'Corny Crops':       POI_FALLBACK,
-  'Coney Crossroads':  POI_FALLBACK,
-  'Rocky Reels':       POI_FALLBACK,
-  'Sanctuary':         POI_FALLBACK,
-  'The Daily Bugle':   POI_FALLBACK,
-  'Camp Cuddle':       POI_FALLBACK,
-  'Rave Cave':         POI_FALLBACK,
-  'Logjam Lumberyard': POI_FALLBACK,
-  'Chrome Crossroads': POI_FALLBACK,
-  "Herald's Sanctum":  POI_FALLBACK,
+  'The Agency':        POI_FALLBACK, // → pois/the-agency.png
+  'Craggy Cliffs':     POI_FALLBACK, // → pois/craggy-cliffs.png
+  'Dirty Docks':       POI_FALLBACK, // → pois/dirty-docks.png
+  'Frenzy Farm':       POI_FALLBACK, // → pois/frenzy-farm.png
+  'Holly Hedges':      POI_FALLBACK, // → pois/holly-hedges.png
+  'Lazy Lake':         POI_FALLBACK, // → pois/lazy-lake.png
+  'Misty Meadows':     POI_FALLBACK, // → pois/misty-meadows.png
+  'Slurpy Swamp':      POI_FALLBACK, // → pois/slurpy-swamp.png
+  'Steamy Stacks':     POI_FALLBACK, // → pois/steamy-stacks.png
+  'Sweaty Sands':      POI_FALLBACK, // → pois/sweaty-sands.png
+  'The Fortilla':      POI_FALLBACK, // → pois/the-fortilla.png
+  'The Grotto':        POI_FALLBACK, // → pois/the-grotto.png
+  'The Shark':         POI_FALLBACK, // → pois/the-shark.png
+  'Weeping Woods':     POI_FALLBACK, // → pois/weeping-woods.png
   // ── Chapter 3 ──────────────────────────────────────────────────────────────
-  'The Joneses':        POI_FALLBACK,
-  'Sleepy Sound':       POI_FALLBACK,
-  'Condo Canyon':       POI_FALLBACK,
-  "Chonker's Speedway": POI_FALLBACK,
-  'Anvil Square':       POI_FALLBACK,
-  'Shuffled Shrines':   POI_FALLBACK,
-  'Lustrous Lagoon':    POI_FALLBACK,
-  'Cloudy Condos':      POI_FALLBACK,
-  'Reality Falls':      POI_FALLBACK,
+  'Camp Cuddle':        POI_FALLBACK, // → pois/camp-cuddle.png
+  "Chonker's Speedway": POI_FALLBACK, // → pois/chonkers-speedway.png
+  'Condo Canyon':       POI_FALLBACK, // → pois/condo-canyon.png
+  'Coney Crossroads':   POI_FALLBACK, // → pois/coney-crossroads.png
+  'Daily Bugle':        POI_FALLBACK, // → pois/daily-bugle.png
+  'Logjam Lumberyard':  POI_FALLBACK, // → pois/logjam-lumberyard.png
+  'Rocky Reels':        POI_FALLBACK, // → pois/rocky-reels.png
+  'Sanctuary':          POI_FALLBACK, // → pois/sanctuary.png
+  'Sleepy Sound':       POI_FALLBACK, // → pois/sleepy-sound.png
+  'Synapse Station':    POI_FALLBACK, // → pois/synapse-station.png
+  'The Joneses':        POI_FALLBACK, // → pois/the-joneses.png
   // ── Chapter 4 ──────────────────────────────────────────────────────────────
-  'Shattered Slabs':    POI_FALLBACK,
-  'Breakwater Bay':     POI_FALLBACK,
-  'Mega City':          POI_FALLBACK,
-  'Steamy Springs':     POI_FALLBACK,
-  'Knotty Nets':        POI_FALLBACK,
-  'Brutal Bastion':     POI_FALLBACK,
-  'Frenzy Fields':      POI_FALLBACK,
-  'Slappy Shores':      POI_FALLBACK,
-  'Lonely Labs':        POI_FALLBACK,
-  'Eclipsed Estate':    POI_FALLBACK,
-  'Relentless Retreat': POI_FALLBACK,
-  'Faulty Splits':      POI_FALLBACK,
+  'Anvil Square':      POI_FALLBACK, // → pois/anvil-square.png
+  'Brutal Bastion':    POI_FALLBACK, // → pois/brutal-bastion.png
+  'Breakwater Bay':    POI_FALLBACK, // → pois/breakwater-bay.png
+  'Faulty Splits':     POI_FALLBACK, // → pois/faulty-splits.png
+  'Frenzy Fields':     POI_FALLBACK, // → pois/frenzy-fields.png
+  'Lonely Labs':       POI_FALLBACK, // → pois/lonely-labs.png
+  'Mega City':         POI_FALLBACK, // → pois/mega-city.png
+  'Shattered Slabs':   POI_FALLBACK, // → pois/shattered-slabs.png
+  'Slappy Shores':     POI_FALLBACK, // → pois/slappy-shores.png
+  'Steamy Springs':    POI_FALLBACK, // → pois/steamy-springs.png
   // ── Chapter 5 ──────────────────────────────────────────────────────────────
-  'Reckless Railways':      POI_FALLBACK,
-  'Grand Glacier':          POI_FALLBACK,
-  'Lavish Lair':            POI_FALLBACK,
-  'Restored Reels':         POI_FALLBACK,
-  'Snooty Steppes':         POI_FALLBACK,
-  'Classy Courts':          POI_FALLBACK,
-  'Ritzy Riviera':          POI_FALLBACK,
-  'Mount Olympus':          POI_FALLBACK,
-  "Brawler's Battleground": POI_FALLBACK,
-  'Grim Gate':              POI_FALLBACK,
-  'Pleasant Piazza':        POI_FALLBACK,
-  "Rebel's Roost":          POI_FALLBACK,
+  'Classy Courts':     POI_FALLBACK, // → pois/classy-courts.png
+  'Fencing Fields':    POI_FALLBACK, // → pois/fencing-fields.png
+  'Grand Glacier':     POI_FALLBACK, // → pois/grand-glacier.png
+  'Hazy Hillside':     POI_FALLBACK, // → pois/hazy-hillside.png
+  'Lavish Lair':       POI_FALLBACK, // → pois/lavish-lair.png
+  'Pleasant Piazza':   POI_FALLBACK, // → pois/pleasant-piazza.png
+  'Reckless Railways': POI_FALLBACK, // → pois/reckless-railways.png
+  'Ritzy Riviera':     POI_FALLBACK, // → pois/ritzy-riviera.png
+  'Ruined Reels':      POI_FALLBACK, // → pois/ruined-reels.png
+  'Snooty Steppes':    POI_FALLBACK, // → pois/snooty-steppes.png
 };
 
 const FORTNITE_POIS = [
-  // Chapter 1
-  { name: 'Tilted Towers',  image: POI_IMAGES['Tilted Towers']  ?? POI_FALLBACK },
+  // ── Chapter 1 ──────────────────────────────────────────────────────────────
+  { name: 'Anarchy Acres',  image: POI_IMAGES['Anarchy Acres']  ?? POI_FALLBACK },
   { name: 'Dusty Depot',    image: POI_IMAGES['Dusty Depot']    ?? POI_FALLBACK },
-  { name: 'Dusty Divot',    image: POI_IMAGES['Dusty Divot']    ?? POI_FALLBACK },
+  { name: 'Fatal Fields',   image: POI_IMAGES['Fatal Fields']   ?? POI_FALLBACK },
+  { name: 'Flush Factory',  image: POI_IMAGES['Flush Factory']  ?? POI_FALLBACK },
+  { name: 'Greasy Grove',   image: POI_IMAGES['Greasy Grove']   ?? POI_FALLBACK },
+  { name: 'Haunted Hills',  image: POI_IMAGES['Haunted Hills']  ?? POI_FALLBACK },
+  { name: 'Junk Junction',  image: POI_IMAGES['Junk Junction']  ?? POI_FALLBACK },
+  { name: 'Lazy Links',     image: POI_IMAGES['Lazy Links']     ?? POI_FALLBACK },
+  { name: 'Lonely Lodge',   image: POI_IMAGES['Lonely Lodge']   ?? POI_FALLBACK },
   { name: 'Loot Lake',      image: POI_IMAGES['Loot Lake']      ?? POI_FALLBACK },
+  { name: 'Lucky Landing',  image: POI_IMAGES['Lucky Landing']  ?? POI_FALLBACK },
+  { name: 'Moisty Mire',    image: POI_IMAGES['Moisty Mire']    ?? POI_FALLBACK },
   { name: 'Pleasant Park',  image: POI_IMAGES['Pleasant Park']  ?? POI_FALLBACK },
   { name: 'Retail Row',     image: POI_IMAGES['Retail Row']     ?? POI_FALLBACK },
-  { name: 'Salty Springs',  image: POI_IMAGES['Salty Springs']  ?? POI_FALLBACK },
-  { name: 'Fatal Fields',   image: POI_IMAGES['Fatal Fields']   ?? POI_FALLBACK },
-  { name: 'Haunted Hills',  image: POI_IMAGES['Haunted Hills']  ?? POI_FALLBACK },
-  { name: 'Snobby Shores',  image: POI_IMAGES['Snobby Shores']  ?? POI_FALLBACK },
-  { name: 'Tomato Town',    image: POI_IMAGES['Tomato Town']    ?? POI_FALLBACK },
-  { name: 'Tomato Temple',  image: POI_IMAGES['Tomato Temple']  ?? POI_FALLBACK },
-  { name: 'Greasy Grove',   image: POI_IMAGES['Greasy Grove']   ?? POI_FALLBACK },
-  { name: 'Flush Factory',  image: POI_IMAGES['Flush Factory']  ?? POI_FALLBACK },
-  { name: 'Wailing Woods',  image: POI_IMAGES['Wailing Woods']  ?? POI_FALLBACK },
-  { name: 'Anarchy Acres',  image: POI_IMAGES['Anarchy Acres']  ?? POI_FALLBACK },
-  { name: 'Junk Junction',  image: POI_IMAGES['Junk Junction']  ?? POI_FALLBACK },
-  { name: 'Lonely Lodge',   image: POI_IMAGES['Lonely Lodge']   ?? POI_FALLBACK },
-  { name: 'Lucky Landing',  image: POI_IMAGES['Lucky Landing']  ?? POI_FALLBACK },
-  { name: 'Lazy Links',     image: POI_IMAGES['Lazy Links']     ?? POI_FALLBACK },
-  { name: 'Paradise Palms', image: POI_IMAGES['Paradise Palms'] ?? POI_FALLBACK },
   { name: 'Risky Reels',    image: POI_IMAGES['Risky Reels']    ?? POI_FALLBACK },
-  { name: 'Leaky Lake',     image: POI_IMAGES['Leaky Lake']     ?? POI_FALLBACK },
-  { name: 'Sunny Steps',    image: POI_IMAGES['Sunny Steps']    ?? POI_FALLBACK },
-  { name: 'Frosty Flights', image: POI_IMAGES['Frosty Flights'] ?? POI_FALLBACK },
-  { name: 'Polar Peak',     image: POI_IMAGES['Polar Peak']     ?? POI_FALLBACK },
-  { name: 'Happy Hamlet',   image: POI_IMAGES['Happy Hamlet']   ?? POI_FALLBACK },
+  { name: 'Salty Springs',  image: POI_IMAGES['Salty Springs']  ?? POI_FALLBACK },
   { name: 'Shifty Shafts',  image: POI_IMAGES['Shifty Shafts']  ?? POI_FALLBACK },
-  { name: 'Moisty Mire',    image: POI_IMAGES['Moisty Mire']    ?? POI_FALLBACK },
-  // Chapter 2
-  { name: 'Sweaty Sands',      image: POI_IMAGES['Sweaty Sands']      ?? POI_FALLBACK },
-  { name: 'Dirty Docks',       image: POI_IMAGES['Dirty Docks']       ?? POI_FALLBACK },
-  { name: 'Misty Meadows',     image: POI_IMAGES['Misty Meadows']     ?? POI_FALLBACK },
-  { name: 'Lazy Lake',         image: POI_IMAGES['Lazy Lake']         ?? POI_FALLBACK },
-  { name: 'Coral Castle',      image: POI_IMAGES['Coral Castle']      ?? POI_FALLBACK },
-  { name: 'Catty Corner',      image: POI_IMAGES['Catty Corner']      ?? POI_FALLBACK },
+  { name: 'Snobby Shores',  image: POI_IMAGES['Snobby Shores']  ?? POI_FALLBACK },
+  { name: 'Tilted Towers',  image: POI_IMAGES['Tilted Towers']  ?? POI_FALLBACK },
+  { name: 'Tomato Town',    image: POI_IMAGES['Tomato Town']    ?? POI_FALLBACK },
+  { name: 'Wailing Woods',  image: POI_IMAGES['Wailing Woods']  ?? POI_FALLBACK },
+  // ── Chapter 2 ──────────────────────────────────────────────────────────────
+  { name: 'The Agency',        image: POI_IMAGES['The Agency']        ?? POI_FALLBACK },
   { name: 'Craggy Cliffs',     image: POI_IMAGES['Craggy Cliffs']     ?? POI_FALLBACK },
+  { name: 'Dirty Docks',       image: POI_IMAGES['Dirty Docks']       ?? POI_FALLBACK },
   { name: 'Frenzy Farm',       image: POI_IMAGES['Frenzy Farm']       ?? POI_FALLBACK },
   { name: 'Holly Hedges',      image: POI_IMAGES['Holly Hedges']      ?? POI_FALLBACK },
-  { name: 'Weeping Woods',     image: POI_IMAGES['Weeping Woods']     ?? POI_FALLBACK },
+  { name: 'Lazy Lake',         image: POI_IMAGES['Lazy Lake']         ?? POI_FALLBACK },
+  { name: 'Misty Meadows',     image: POI_IMAGES['Misty Meadows']     ?? POI_FALLBACK },
   { name: 'Slurpy Swamp',      image: POI_IMAGES['Slurpy Swamp']      ?? POI_FALLBACK },
   { name: 'Steamy Stacks',     image: POI_IMAGES['Steamy Stacks']     ?? POI_FALLBACK },
-  { name: 'The Authority',     image: POI_IMAGES['The Authority']     ?? POI_FALLBACK },
-  { name: 'The Agency',        image: POI_IMAGES['The Agency']        ?? POI_FALLBACK },
-  { name: 'The Yacht',         image: POI_IMAGES['The Yacht']         ?? POI_FALLBACK },
-  { name: 'The Rig',           image: POI_IMAGES['The Rig']           ?? POI_FALLBACK },
+  { name: 'Sweaty Sands',      image: POI_IMAGES['Sweaty Sands']      ?? POI_FALLBACK },
+  { name: 'The Fortilla',      image: POI_IMAGES['The Fortilla']      ?? POI_FALLBACK },
+  { name: 'The Grotto',        image: POI_IMAGES['The Grotto']        ?? POI_FALLBACK },
   { name: 'The Shark',         image: POI_IMAGES['The Shark']         ?? POI_FALLBACK },
-  { name: 'Salty Towers',      image: POI_IMAGES['Salty Towers']      ?? POI_FALLBACK },
-  { name: 'Colossal Crops',    image: POI_IMAGES['Colossal Crops']    ?? POI_FALLBACK },
-  { name: 'Boney Burbs',       image: POI_IMAGES['Boney Burbs']       ?? POI_FALLBACK },
-  { name: 'Believer Beach',    image: POI_IMAGES['Believer Beach']    ?? POI_FALLBACK },
-  { name: 'Corny Crops',       image: POI_IMAGES['Corny Crops']       ?? POI_FALLBACK },
-  { name: 'Coney Crossroads',  image: POI_IMAGES['Coney Crossroads']  ?? POI_FALLBACK },
-  { name: 'Rocky Reels',       image: POI_IMAGES['Rocky Reels']       ?? POI_FALLBACK },
-  { name: 'Sanctuary',         image: POI_IMAGES['Sanctuary']         ?? POI_FALLBACK },
-  { name: 'The Daily Bugle',   image: POI_IMAGES['The Daily Bugle']   ?? POI_FALLBACK },
-  { name: 'Camp Cuddle',       image: POI_IMAGES['Camp Cuddle']       ?? POI_FALLBACK },
-  { name: 'Rave Cave',         image: POI_IMAGES['Rave Cave']         ?? POI_FALLBACK },
-  { name: 'Logjam Lumberyard', image: POI_IMAGES['Logjam Lumberyard'] ?? POI_FALLBACK },
-  { name: 'Chrome Crossroads', image: POI_IMAGES['Chrome Crossroads'] ?? POI_FALLBACK },
-  { name: "Herald's Sanctum",  image: POI_IMAGES["Herald's Sanctum"]  ?? POI_FALLBACK },
-  // Chapter 3
-  { name: 'The Joneses',         image: POI_IMAGES['The Joneses']         ?? POI_FALLBACK },
-  { name: 'Sleepy Sound',        image: POI_IMAGES['Sleepy Sound']        ?? POI_FALLBACK },
-  { name: 'Condo Canyon',        image: POI_IMAGES['Condo Canyon']        ?? POI_FALLBACK },
-  { name: "Chonker's Speedway",  image: POI_IMAGES["Chonker's Speedway"]  ?? POI_FALLBACK },
-  { name: 'Anvil Square',        image: POI_IMAGES['Anvil Square']        ?? POI_FALLBACK },
-  { name: 'Shuffled Shrines',    image: POI_IMAGES['Shuffled Shrines']    ?? POI_FALLBACK },
-  { name: 'Lustrous Lagoon',     image: POI_IMAGES['Lustrous Lagoon']     ?? POI_FALLBACK },
-  { name: 'Cloudy Condos',       image: POI_IMAGES['Cloudy Condos']       ?? POI_FALLBACK },
-  { name: 'Reality Falls',       image: POI_IMAGES['Reality Falls']       ?? POI_FALLBACK },
-  // Chapter 4
-  { name: 'Shattered Slabs',    image: POI_IMAGES['Shattered Slabs']    ?? POI_FALLBACK },
-  { name: 'Breakwater Bay',     image: POI_IMAGES['Breakwater Bay']     ?? POI_FALLBACK },
-  { name: 'Mega City',          image: POI_IMAGES['Mega City']          ?? POI_FALLBACK },
-  { name: 'Steamy Springs',     image: POI_IMAGES['Steamy Springs']     ?? POI_FALLBACK },
-  { name: 'Knotty Nets',        image: POI_IMAGES['Knotty Nets']        ?? POI_FALLBACK },
-  { name: 'Brutal Bastion',     image: POI_IMAGES['Brutal Bastion']     ?? POI_FALLBACK },
-  { name: 'Frenzy Fields',      image: POI_IMAGES['Frenzy Fields']      ?? POI_FALLBACK },
-  { name: 'Slappy Shores',      image: POI_IMAGES['Slappy Shores']      ?? POI_FALLBACK },
-  { name: 'Lonely Labs',        image: POI_IMAGES['Lonely Labs']        ?? POI_FALLBACK },
-  { name: 'Eclipsed Estate',    image: POI_IMAGES['Eclipsed Estate']    ?? POI_FALLBACK },
-  { name: 'Relentless Retreat', image: POI_IMAGES['Relentless Retreat'] ?? POI_FALLBACK },
-  { name: 'Faulty Splits',      image: POI_IMAGES['Faulty Splits']      ?? POI_FALLBACK },
-  // Chapter 5
-  { name: 'Reckless Railways',      image: POI_IMAGES['Reckless Railways']      ?? POI_FALLBACK },
-  { name: 'Grand Glacier',          image: POI_IMAGES['Grand Glacier']          ?? POI_FALLBACK },
-  { name: 'Lavish Lair',            image: POI_IMAGES['Lavish Lair']            ?? POI_FALLBACK },
-  { name: 'Restored Reels',         image: POI_IMAGES['Restored Reels']         ?? POI_FALLBACK },
-  { name: 'Snooty Steppes',         image: POI_IMAGES['Snooty Steppes']         ?? POI_FALLBACK },
-  { name: 'Classy Courts',          image: POI_IMAGES['Classy Courts']          ?? POI_FALLBACK },
-  { name: 'Ritzy Riviera',          image: POI_IMAGES['Ritzy Riviera']          ?? POI_FALLBACK },
-  { name: 'Mount Olympus',          image: POI_IMAGES['Mount Olympus']          ?? POI_FALLBACK },
-  { name: "Brawler's Battleground", image: POI_IMAGES["Brawler's Battleground"] ?? POI_FALLBACK },
-  { name: 'Grim Gate',              image: POI_IMAGES['Grim Gate']              ?? POI_FALLBACK },
-  { name: 'Pleasant Piazza',        image: POI_IMAGES['Pleasant Piazza']        ?? POI_FALLBACK },
-  { name: "Rebel's Roost",          image: POI_IMAGES["Rebel's Roost"]          ?? POI_FALLBACK },
+  { name: 'Weeping Woods',     image: POI_IMAGES['Weeping Woods']     ?? POI_FALLBACK },
+  // ── Chapter 3 ──────────────────────────────────────────────────────────────
+  { name: 'Camp Cuddle',        image: POI_IMAGES['Camp Cuddle']        ?? POI_FALLBACK },
+  { name: "Chonker's Speedway", image: POI_IMAGES["Chonker's Speedway"] ?? POI_FALLBACK },
+  { name: 'Condo Canyon',       image: POI_IMAGES['Condo Canyon']       ?? POI_FALLBACK },
+  { name: 'Coney Crossroads',   image: POI_IMAGES['Coney Crossroads']   ?? POI_FALLBACK },
+  { name: 'Daily Bugle',        image: POI_IMAGES['Daily Bugle']        ?? POI_FALLBACK },
+  { name: 'Logjam Lumberyard',  image: POI_IMAGES['Logjam Lumberyard']  ?? POI_FALLBACK },
+  { name: 'Rocky Reels',        image: POI_IMAGES['Rocky Reels']        ?? POI_FALLBACK },
+  { name: 'Sanctuary',          image: POI_IMAGES['Sanctuary']          ?? POI_FALLBACK },
+  { name: 'Sleepy Sound',       image: POI_IMAGES['Sleepy Sound']       ?? POI_FALLBACK },
+  { name: 'Synapse Station',    image: POI_IMAGES['Synapse Station']    ?? POI_FALLBACK },
+  { name: 'The Joneses',        image: POI_IMAGES['The Joneses']        ?? POI_FALLBACK },
+  // ── Chapter 4 ──────────────────────────────────────────────────────────────
+  { name: 'Anvil Square',      image: POI_IMAGES['Anvil Square']      ?? POI_FALLBACK },
+  { name: 'Brutal Bastion',    image: POI_IMAGES['Brutal Bastion']    ?? POI_FALLBACK },
+  { name: 'Breakwater Bay',    image: POI_IMAGES['Breakwater Bay']    ?? POI_FALLBACK },
+  { name: 'Faulty Splits',     image: POI_IMAGES['Faulty Splits']     ?? POI_FALLBACK },
+  { name: 'Frenzy Fields',     image: POI_IMAGES['Frenzy Fields']     ?? POI_FALLBACK },
+  { name: 'Lonely Labs',       image: POI_IMAGES['Lonely Labs']       ?? POI_FALLBACK },
+  { name: 'Mega City',         image: POI_IMAGES['Mega City']         ?? POI_FALLBACK },
+  { name: 'Shattered Slabs',   image: POI_IMAGES['Shattered Slabs']   ?? POI_FALLBACK },
+  { name: 'Slappy Shores',     image: POI_IMAGES['Slappy Shores']     ?? POI_FALLBACK },
+  { name: 'Steamy Springs',    image: POI_IMAGES['Steamy Springs']    ?? POI_FALLBACK },
+  // ── Chapter 5 ──────────────────────────────────────────────────────────────
+  { name: 'Classy Courts',     image: POI_IMAGES['Classy Courts']     ?? POI_FALLBACK },
+  { name: 'Fencing Fields',    image: POI_IMAGES['Fencing Fields']    ?? POI_FALLBACK },
+  { name: 'Grand Glacier',     image: POI_IMAGES['Grand Glacier']     ?? POI_FALLBACK },
+  { name: 'Hazy Hillside',     image: POI_IMAGES['Hazy Hillside']     ?? POI_FALLBACK },
+  { name: 'Lavish Lair',       image: POI_IMAGES['Lavish Lair']       ?? POI_FALLBACK },
+  { name: 'Pleasant Piazza',   image: POI_IMAGES['Pleasant Piazza']   ?? POI_FALLBACK },
+  { name: 'Reckless Railways', image: POI_IMAGES['Reckless Railways'] ?? POI_FALLBACK },
+  { name: 'Ritzy Riviera',     image: POI_IMAGES['Ritzy Riviera']     ?? POI_FALLBACK },
+  { name: 'Ruined Reels',      image: POI_IMAGES['Ruined Reels']      ?? POI_FALLBACK },
+  { name: 'Snooty Steppes',    image: POI_IMAGES['Snooty Steppes']    ?? POI_FALLBACK },
 ];
 
 const COOLDOWN_MS = 90 * 60 * 1000;
