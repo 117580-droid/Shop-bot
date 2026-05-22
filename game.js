@@ -4,7 +4,7 @@ const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('disc
 // Individual POI images are hosted in the /pois folder on GitHub and served via
 // the raw.githubusercontent.com CDN. Each key maps to a direct PNG URL using
 // the format:
-//   https://raw.githubusercontent.com/117580-droid/Shop-bot/sandbox/3a54afec-b06b-4e0a-bb11--fn06/pois/{poi-name}.png
+//   https://raw.githubusercontent.com/117580-droid/Shop-bot/sandbox/3a54afec-b06b-4e0a-bb11--oau7/pois/{poi-name}.png
 // where {poi-name} is the POI name lowercased with spaces replaced by hyphens
 // (apostrophes removed). Example: "Chonker's Speedway" → "chonkers-speedway.png"
 //
@@ -18,7 +18,7 @@ const POI_FALLBACK = 'https://cdn2.unrealengine.com/Fortnite/fortnite-game/battl
 
 // Base URL for POI images hosted in the /pois folder on GitHub.
 // Usage: `${POI_IMG_BASE}{poi-name}.png`  (name lowercased, spaces → hyphens, apostrophes removed)
-const POI_IMG_BASE = 'https://raw.githubusercontent.com/117580-droid/Shop-bot/sandbox/3a54afec-b06b-4e0a-bb11--fn06/pois/';
+const POI_IMG_BASE = 'https://raw.githubusercontent.com/117580-droid/Shop-bot/sandbox/3a54afec-b06b-4e0a-bb11--oau7/pois/';
 
 const POI_IMAGES = {
   // ── Chapter 1 ──────────────────────────────────────────────────────────────
