@@ -22,76 +22,76 @@ const POI_IMG_BASE = 'https://raw.githubusercontent.com/117580-droid/Shop-bot/ma
 
 const POI_IMAGES = {
   // ── Chapter 1 ──────────────────────────────────────────────────────────────
-  'Anarchy Acres':  POI_FALLBACK, // → pois/anarchy-acres.png
-  'Dusty Depot':    POI_FALLBACK, // → pois/dusty-depot.png
-  'Fatal Fields':   POI_FALLBACK, // → pois/fatal-fields.png
-  'Flush Factory':  POI_FALLBACK, // → pois/flush-factory.png
-  'Greasy Grove':   POI_FALLBACK, // → pois/greasy-grove.png
-  'Haunted Hills':  POI_FALLBACK, // → pois/haunted-hills.png
-  'Junk Junction':  POI_FALLBACK, // → pois/junk-junction.png
-  'Lazy Links':     POI_FALLBACK, // → pois/lazy-links.png
-  'Lonely Lodge':   POI_FALLBACK, // → pois/lonely-lodge.png
-  'Loot Lake':      POI_FALLBACK, // → pois/loot-lake.png
-  'Lucky Landing':  POI_FALLBACK, // → pois/lucky-landing.png
-  'Moisty Mire':    POI_FALLBACK, // → pois/moisty-mire.png
-  'Pleasant Park':  POI_FALLBACK, // → pois/pleasant-park.png
-  'Retail Row':     POI_FALLBACK, // → pois/retail-row.png
-  'Risky Reels':    POI_FALLBACK, // → pois/risky-reels.png
-  'Salty Springs':  POI_FALLBACK, // → pois/salty-springs.png
-  'Shifty Shafts':  POI_FALLBACK, // → pois/shifty-shafts.png
-  'Snobby Shores':  POI_FALLBACK, // → pois/snobby-shores.png
-  'Tilted Towers':  POI_FALLBACK, // → pois/tilted-towers.png
-  'Tomato Town':    POI_FALLBACK, // → pois/tomato-town.png
-  'Wailing Woods':  POI_FALLBACK, // → pois/wailing-woods.png
+  'Anarchy Acres': `${POI_IMG_BASE}anarchy-acres.svg`,
+  'Dusty Depot': `${POI_IMG_BASE}dusty-depot.svg`,
+  'Fatal Fields': `${POI_IMG_BASE}fatal-fields.svg`,
+  'Flush Factory': `${POI_IMG_BASE}flush-factory.svg`,
+  'Greasy Grove': `${POI_IMG_BASE}greasy-grove.svg`,
+  'Haunted Hills': `${POI_IMG_BASE}haunted-hills.svg`,
+  'Junk Junction': `${POI_IMG_BASE}junk-junction.svg`,
+  'Lazy Links': `${POI_IMG_BASE}lazy-links.svg`,
+  'Lonely Lodge': `${POI_IMG_BASE}lonely-lodge.svg`,
+  'Loot Lake': `${POI_IMG_BASE}loot-lake.svg`,
+  'Lucky Landing': `${POI_IMG_BASE}lucky-landing.svg`,
+  'Moisty Mire': `${POI_IMG_BASE}moisty-mire.svg`,
+  'Pleasant Park': `${POI_IMG_BASE}pleasant-park.svg`,
+  'Retail Row': `${POI_IMG_BASE}retail-row.svg`,
+  'Risky Reels': `${POI_IMG_BASE}risky-reels.svg`,
+  'Salty Springs': `${POI_IMG_BASE}salty-springs.svg`,
+  'Shifty Shafts': `${POI_IMG_BASE}shifty-shafts.svg`,
+  'Snobby Shores': `${POI_IMG_BASE}snobby-shores.svg`,
+  'Tilted Towers': `${POI_IMG_BASE}tilted-towers.svg`,
+  'Tomato Town': `${POI_IMG_BASE}tomato-town.svg`,
+  'Wailing Woods': `${POI_IMG_BASE}wailing-woods.svg`,
   // ── Chapter 2 ──────────────────────────────────────────────────────────────
-  'The Agency':        POI_FALLBACK, // → pois/the-agency.png
-  'Craggy Cliffs':     POI_FALLBACK, // → pois/craggy-cliffs.png
-  'Dirty Docks':       POI_FALLBACK, // → pois/dirty-docks.png
-  'Frenzy Farm':       POI_FALLBACK, // → pois/frenzy-farm.png
-  'Holly Hedges':      POI_FALLBACK, // → pois/holly-hedges.png
-  'Lazy Lake':         POI_FALLBACK, // → pois/lazy-lake.png
-  'Misty Meadows':     POI_FALLBACK, // → pois/misty-meadows.png
-  'Slurpy Swamp':      POI_FALLBACK, // → pois/slurpy-swamp.png
-  'Steamy Stacks':     POI_FALLBACK, // → pois/steamy-stacks.png
-  'Sweaty Sands':      POI_FALLBACK, // → pois/sweaty-sands.png
-  'The Fortilla':      POI_FALLBACK, // → pois/the-fortilla.png
-  'The Grotto':        POI_FALLBACK, // → pois/the-grotto.png
-  'The Shark':         POI_FALLBACK, // → pois/the-shark.png
-  'Weeping Woods':     POI_FALLBACK, // → pois/weeping-woods.png
+  'The Agency': `${POI_IMG_BASE}the-agency.svg`,
+  'Craggy Cliffs': `${POI_IMG_BASE}craggy-cliffs.svg`,
+  'Dirty Docks': `${POI_IMG_BASE}dirty-docks.svg`,
+  'Frenzy Farm': `${POI_IMG_BASE}frenzy-farm.svg`,
+  'Holly Hedges': `${POI_IMG_BASE}holly-hedges.svg`,
+  'Lazy Lake': `${POI_IMG_BASE}lazy-lake.svg`,
+  'Misty Meadows': `${POI_IMG_BASE}misty-meadows.svg`,
+  'Slurpy Swamp': `${POI_IMG_BASE}slurpy-swamp.svg`,
+  'Steamy Stacks': `${POI_IMG_BASE}steamy-stacks.svg`,
+  'Sweaty Sands': `${POI_IMG_BASE}sweaty-sands.svg`,
+  'The Fortilla': `${POI_IMG_BASE}the-fortilla.svg`,
+  'The Grotto': `${POI_IMG_BASE}the-grotto.svg`,
+  'The Shark': `${POI_IMG_BASE}the-shark.svg`,
+  'Weeping Woods': `${POI_IMG_BASE}weeping-woods.svg`,
   // ── Chapter 3 ──────────────────────────────────────────────────────────────
-  'Camp Cuddle':        POI_FALLBACK, // → pois/camp-cuddle.png
+  'Camp Cuddle': `${POI_IMG_BASE}camp-cuddle.svg`,
   "Chonker's Speedway": POI_FALLBACK, // → pois/chonkers-speedway.png
-  'Condo Canyon':       POI_FALLBACK, // → pois/condo-canyon.png
-  'Coney Crossroads':   POI_FALLBACK, // → pois/coney-crossroads.png
-  'Daily Bugle':        POI_FALLBACK, // → pois/daily-bugle.png
-  'Logjam Lumberyard':  POI_FALLBACK, // → pois/logjam-lumberyard.png
-  'Rocky Reels':        POI_FALLBACK, // → pois/rocky-reels.png
-  'Sanctuary':          POI_FALLBACK, // → pois/sanctuary.png
-  'Sleepy Sound':       POI_FALLBACK, // → pois/sleepy-sound.png
-  'Synapse Station':    POI_FALLBACK, // → pois/synapse-station.png
-  'The Joneses':        POI_FALLBACK, // → pois/the-joneses.png
+  'Condo Canyon': `${POI_IMG_BASE}condo-canyon.svg`,
+  'Coney Crossroads': `${POI_IMG_BASE}coney-crossroads.svg`,
+  'Daily Bugle': `${POI_IMG_BASE}daily-bugle.svg`,
+  'Logjam Lumberyard': `${POI_IMG_BASE}logjam-lumberyard.svg`,
+  'Rocky Reels': `${POI_IMG_BASE}rocky-reels.svg`,
+  'Sanctuary': `${POI_IMG_BASE}sanctuary.svg`,
+  'Sleepy Sound': `${POI_IMG_BASE}sleepy-sound.svg`,
+  'Synapse Station': `${POI_IMG_BASE}synapse-station.svg`,
+  'The Joneses': `${POI_IMG_BASE}the-joneses.svg`,
   // ── Chapter 4 ──────────────────────────────────────────────────────────────
-  'Anvil Square':      POI_FALLBACK, // → pois/anvil-square.png
-  'Brutal Bastion':    POI_FALLBACK, // → pois/brutal-bastion.png
-  'Breakwater Bay':    POI_FALLBACK, // → pois/breakwater-bay.png
-  'Faulty Splits':     POI_FALLBACK, // → pois/faulty-splits.png
-  'Frenzy Fields':     POI_FALLBACK, // → pois/frenzy-fields.png
-  'Lonely Labs':       POI_FALLBACK, // → pois/lonely-labs.png
-  'Mega City':         POI_FALLBACK, // → pois/mega-city.png
-  'Shattered Slabs':   POI_FALLBACK, // → pois/shattered-slabs.png
-  'Slappy Shores':     POI_FALLBACK, // → pois/slappy-shores.png
-  'Steamy Springs':    POI_FALLBACK, // → pois/steamy-springs.png
+  'Anvil Square': `${POI_IMG_BASE}anvil-square.svg`,
+  'Brutal Bastion': `${POI_IMG_BASE}brutal-bastion.svg`,
+  'Breakwater Bay': `${POI_IMG_BASE}breakwater-bay.svg`,
+  'Faulty Splits': `${POI_IMG_BASE}faulty-splits.svg`,
+  'Frenzy Fields': `${POI_IMG_BASE}frenzy-fields.svg`,
+  'Lonely Labs': `${POI_IMG_BASE}lonely-labs.svg`,
+  'Mega City': `${POI_IMG_BASE}mega-city.svg`,
+  'Shattered Slabs': `${POI_IMG_BASE}shattered-slabs.svg`,
+  'Slappy Shores': `${POI_IMG_BASE}slappy-shores.svg`,
+  'Steamy Springs': `${POI_IMG_BASE}steamy-springs.svg`,
   // ── Chapter 5 ──────────────────────────────────────────────────────────────
-  'Classy Courts':     POI_FALLBACK, // → pois/classy-courts.png
-  'Fencing Fields':    POI_FALLBACK, // → pois/fencing-fields.png
-  'Grand Glacier':     POI_FALLBACK, // → pois/grand-glacier.png
-  'Hazy Hillside':     POI_FALLBACK, // → pois/hazy-hillside.png
-  'Lavish Lair':       POI_FALLBACK, // → pois/lavish-lair.png
-  'Pleasant Piazza':   POI_FALLBACK, // → pois/pleasant-piazza.png
-  'Reckless Railways': POI_FALLBACK, // → pois/reckless-railways.png
-  'Ritzy Riviera':     POI_FALLBACK, // → pois/ritzy-riviera.png
-  'Ruined Reels':      POI_FALLBACK, // → pois/ruined-reels.png
-  'Snooty Steppes':    POI_FALLBACK, // → pois/snooty-steppes.png
+  'Classy Courts': `${POI_IMG_BASE}classy-courts.svg`,
+  'Fencing Fields': `${POI_IMG_BASE}fencing-fields.svg`,
+  'Grand Glacier': `${POI_IMG_BASE}grand-glacier.svg`,
+  'Hazy Hillside': `${POI_IMG_BASE}hazy-hillside.svg`,
+  'Lavish Lair': `${POI_IMG_BASE}lavish-lair.svg`,
+  'Pleasant Piazza': `${POI_IMG_BASE}pleasant-piazza.svg`,
+  'Reckless Railways': `${POI_IMG_BASE}reckless-railways.svg`,
+  'Ritzy Riviera': `${POI_IMG_BASE}ritzy-riviera.svg`,
+  'Ruined Reels': `${POI_IMG_BASE}ruined-reels.svg`,
+  'Snooty Steppes': `${POI_IMG_BASE}snooty-steppes.svg`,
 };
 
 const FORTNITE_POIS = [
