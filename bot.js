@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
-const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
+const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants, sendWebhook } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 
@@ -1278,6 +1278,37 @@ client.on('interactionCreate', async (interaction) => {
       if (itemName.toUpperCase() === '50 WIN LOTTERY') {
         for (let i = 0; i < quantity; i++) {
           addToLottery(db, user.id);
+        }
+
+        // Notify the website of the updated participant list so it can display
+        // new entrants in real-time without waiting for /spinwheel to be run.
+        // Fire-and-forget — a webhook failure must never block the purchase flow.
+        try {
+          const allParticipants  = getLotteryParticipants(db);
+          const totalTickets     = allParticipants.length;
+          const uniqueUserIds    = [...new Set(allParticipants.map(p => p.user_id))];
+          const uniqueEntrants   = uniqueUserIds.length;
+
+          // Resolve display names for every unique entrant.
+          const nameEntries = await Promise.all(
+            uniqueUserIds.map(async uid => {
+              try {
+                const u = await client.users.fetch(uid);
+                return u.username;
+              } catch {
+                return `<@${uid}>`;
+              }
+            })
+          );
+
+          await sendWebhook({
+            action:         'update',
+            participants:   nameEntries,
+            totalTickets,
+            uniqueEntrants,
+          });
+        } catch (err) {
+          logError('buy: lottery webhook update', err);
         }
       }
 
