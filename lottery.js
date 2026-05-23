@@ -455,19 +455,18 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     await sleep(1_000);
 
     // ── Step 3: Visual spinning wheel animation ───────────────────────────────
-    // Snappy deceleration schedule — 100 frames across ~3-4 s total.
-    // Each entry is [delayMs, rotationIncrement] so the wheel blazes through
-    // the fast phase and then decelerates aggressively into the final slot.
-    //   Frames  1-30 →  20 ms, +1.5 rotation  (super fast spin)
-    //   Frames 31-60 →  40 ms, +1.0 rotation  (still fast, starting to slow)
-    //   Frames 61-80 →  80 ms, +0.5 rotation  (slowing down)
-    //   Frames 81-100 → 150 ms, +0.2 rotation  (dramatic finish)
+    // Ultra-smooth continuous motion — 200 frames across ~2-3 s total.
+    // Each entry is [delayMs, rotationIncrement] for buttery-smooth spinning.
+    //   Frames 1-80   → 10 ms, +2.0 rotation  (ultra-fast, super smooth)
+    //   Frames 81-140 → 15 ms, +1.5 rotation  (blazing, smooth deceleration)
+    //   Frames 141-180 → 20 ms, +0.8 rotation (slowing smoothly)
+    //   Frames 181-200 → 30 ms, +0.3 rotation (final dramatic slow)
     const spinFrames = [
       // [delayMs, rotationIncrement]
-      ...Array(30).fill([  20, 1.5]),   // frames  1-30 (super fast)
-      ...Array(30).fill([  40, 1.0]),   // frames 31-60 (fast, easing)
-      ...Array(20).fill([  80, 0.5]),   // frames 61-80 (slowing)
-      ...Array(20).fill([ 150, 0.2]),   // frames 81-100 (dramatic finish)
+      ...Array.from({ length: 80  }, () => [10, 2.0]),  // frames 1-80   (ultra-fast)
+      ...Array.from({ length: 60  }, () => [15, 1.5]),  // frames 81-140 (blazing)
+      ...Array.from({ length: 40  }, () => [20, 0.8]),  // frames 141-180 (smooth slow)
+      ...Array.from({ length: 20  }, () => [30, 0.3]),  // frames 181-200 (final crawl)
     ];
 
     // Pick a random name that differs from the previously shown one.
