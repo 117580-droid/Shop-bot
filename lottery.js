@@ -331,11 +331,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     // Remove this round's participants from the database immediately so any
     // tickets bought while the spin is in progress count toward the NEXT round.
     // The `participants` snapshot captured above is used for the entire spin.
-    // The website reset is also sent now so the wheel clears the previous
-    // round's display before the new spin animation begins — names from the
-    // last spin stay visible until this point.
     clearLottery(db);
-    await sendWebhook({ action: 'reset' });
 
     const totalTickets  = participants.length;
     const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
@@ -533,6 +529,12 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
 
       }
     }
+
+    // ── Webhook: reset ────────────────────────────────────────────────────────
+    // Clear the wheel on the website the moment the spin animation ends —
+    // before any winner messages are sent — so usernames disappear right when
+    // the spin finishes rather than after all announcements complete.
+    await sendWebhook({ action: 'reset' });
 
     // ── Step 4: Pick the winner ───────────────────────────────────────────────
     const winnerEntry = participants[Math.floor(Math.random() * participants.length)];
