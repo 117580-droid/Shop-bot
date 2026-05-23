@@ -444,11 +444,11 @@ function generateWheelEmbed(selectedPoi, pois, isSpinning, rotationOffset = 0) {
 // shown.  Each frame edits the deferred reply in-place so the wheel appears to
 // spin inside a single Discord message.
 //
-// Schedule (total ≈ 3-4 s, 100 frames):
-//   Frames  1-30  →  20 ms apart, +1.5 rotation  (super fast spin)
-//   Frames 31-60  →  40 ms apart, +1.0 rotation  (still fast, easing)
-//   Frames 61-80  →  80 ms apart, +0.5 rotation  (slowing down)
-//   Frames 81-100 → 150 ms apart, +0.2 rotation  (dramatic finish)
+// Schedule (total ≈ 2-3 s, 200 frames — ultra-smooth continuous motion):
+//   Frames 1-80   → 10 ms apart, +2.0 rotation  (ultra-fast, super smooth)
+//   Frames 81-140 → 15 ms apart, +1.5 rotation  (blazing, smooth deceleration)
+//   Frames 141-180 → 20 ms apart, +0.8 rotation (slowing smoothly)
+//   Frames 181-200 → 30 ms apart, +0.3 rotation (final dramatic slow)
 //
 // The final editReply (the actual result) is NOT done here — the caller is
 // responsible for that so it can attach the correct colour, description, etc.
@@ -458,12 +458,13 @@ function generateWheelEmbed(selectedPoi, pois, isSpinning, rotationOffset = 0) {
 // @param {Array<{name:string,image:string}>} pois  Full POI list to sample from.
 // @param {{name:string,image:string}} finalPoi     The POI to land on last.
 async function spinWheelAnimation(interaction, pois, finalPoi) {
-  // Frame schedule: [delayMs, rotationIncrement] — 100 frames total.
-  const frameSchedule = [
-    ...Array(30).fill([ 20, 1.5]),   // frames  1-30 (super fast)
-    ...Array(30).fill([ 40, 1.0]),   // frames 31-60 (fast, easing)
-    ...Array(20).fill([ 80, 0.5]),   // frames 61-80 (slowing)
-    ...Array(20).fill([150, 0.2]),   // frames 81-100 (dramatic finish)
+  // Build the delay + rotation-increment schedule for all 200 frames.
+  // Each entry is [delayMs, rotationIncrement].
+  const schedule = [
+    ...Array.from({ length: 80  }, () => [10, 2.0]),  // frames 1-80   (ultra-fast)
+    ...Array.from({ length: 60  }, () => [15, 1.5]),  // frames 81-140 (blazing)
+    ...Array.from({ length: 40  }, () => [20, 0.8]),  // frames 141-180 (smooth slow)
+    ...Array.from({ length: 20  }, () => [30, 0.3]),  // frames 181-200 (final crawl)
   ];
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -486,22 +487,23 @@ async function spinWheelAnimation(interaction, pois, finalPoi) {
   }
 
   let lastShown  = null;
-  let rotation   = 0; // tracks how far the ring has visually rotated
+  let rotation   = 0; // tracks how far the ring has visually rotated (fractional)
 
-  for (let i = 0; i < frameSchedule.length; i++) {
-    const [frameDelay, frameIncrement] = frameSchedule[i];
-    await sleep(frameDelay);
+  for (let i = 0; i < schedule.length; i++) {
+    const [delayMs, rotInc] = schedule[i];
+    await sleep(delayMs);
 
-    const isLastFrame = i === frameSchedule.length - 1;
+    const isLastFrame = i === schedule.length - 1;
     const framePoi    = isLastFrame ? finalPoi : pickRandom(lastShown?.name);
     lastShown         = framePoi;
 
-    // Advance the ring rotation by this frame's increment.
-    rotation = (rotation + frameIncrement) % WHEEL_SEGMENTS.length;
+    // Advance the ring rotation by the per-phase increment, wrapping around
+    // the segment count so the ring spins continuously without overflow.
+    rotation = (rotation + rotInc) % WHEEL_SEGMENTS.length;
 
     try {
       await interaction.editReply({
-        embeds: [generateWheelEmbed(framePoi, pois, !isLastFrame, rotation)],
+        embeds: [generateWheelEmbed(framePoi, pois, !isLastFrame, Math.floor(rotation))],
       });
     } catch (err) {
       // If the interaction token expired or the edit failed, abort gracefully
