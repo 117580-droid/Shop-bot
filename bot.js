@@ -187,6 +187,13 @@ const scheduledUnbans = new Map();
 // Scheduled unmutes: key = `${guildId}:${userId}`, value = { guildId, userId, unmuteAt }
 const scheduledUnmutes = new Map();
 
+// ─── Lottery spin state ───────────────────────────────────────────────────────
+// Set to true for the entire duration of handleLottery (from the moment the DB
+// is cleared until the spin fully completes).  While true, /buy suppresses its
+// webhook update so the website keeps showing the original participant list that
+// was sent at the start of the spin rather than the (empty) next-round list.
+let isSpinning = false;
+
 /**
  * Process any pending unbans and unmutes whose time has elapsed.
  * Called every minute from the main setInterval loop.
@@ -1052,7 +1059,12 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      return await handleLottery(interaction, db, client, updateBalance, targetGuild);
+      isSpinning = true;
+      try {
+        return await handleLottery(interaction, db, client, updateBalance, targetGuild);
+      } finally {
+        isSpinning = false;
+      }
     }
 
     // ── /giveaway ─────────────────────────────────────────────────────────────
@@ -1351,10 +1363,17 @@ client.on('interactionCreate', async (interaction) => {
           addToLottery(db, user.id);
         }
 
-        // Notify the lottery wheel website of the updated participant list.
-        // Pass the Discord client so user IDs are resolved to real usernames.
-        const allParticipants = getLotteryParticipants(db);
-        sendWebhook(allParticipants, client).catch(err => logError('buy: sendWebhook', err));
+        // Notify the lottery wheel website of the updated participant list, but
+        // only when no spin is currently in progress.  During a spin the DB has
+        // already been cleared for the next round, so the participant list is
+        // incomplete — sending it would overwrite the original names shown on the
+        // website with just the ticket(s) bought during the countdown.
+        if (!isSpinning) {
+          const allParticipants = getLotteryParticipants(db);
+          sendWebhook(allParticipants, client).catch(err => logError('buy: sendWebhook', err));
+        } else {
+          log('INFO', 'buy: skipping webhook update — spin is in progress.');
+        }
       }
 
       const newBalance = getBalance(user.id);
