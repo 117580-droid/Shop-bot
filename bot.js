@@ -1274,11 +1274,13 @@ client.on('interactionCreate', async (interaction) => {
       // Sync the new item to the website in the background.
       if (newItem) {
         sendCoinShopWebhook({
-          action:      'add_item',
-          id:          newItem.id,
-          name:        newItem.name,
-          price:       newItem.price,
-          description: newItem.description,
+          action: 'add_item',
+          item: {
+            id:          newItem.id,
+            name:        newItem.name,
+            price:       newItem.price,
+            description: newItem.description,
+          },
         }).catch(err => logError('additem: sendCoinShopWebhook', err));
       }
 
@@ -1338,7 +1340,7 @@ client.on('interactionCreate', async (interaction) => {
       // Sync the removal to the website in the background.
       sendCoinShopWebhook({
         action: 'remove_item',
-        id:     item.id,
+        itemId: item.id,
       }).catch(err => logError('removeitem: sendCoinShopWebhook', err));
 
       log('INFO', `removeitem: owner ${user.username} (${user.id}) removed shop item "${item.name}" (id=${item.id}).`);
