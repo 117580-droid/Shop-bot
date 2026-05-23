@@ -81,9 +81,9 @@ async function safeReply(interaction, payload) {
  * caught and logged so a webhook failure never interrupts the purchase flow.
  *
  * @param {object[]} participants  All rows from lottery_participants.
- * @param {Map<string,string>} nameMap  userId → display name (may be empty).
+ * @param {import('discord.js').Client} discordClient  The Discord client used to resolve user IDs to usernames.
  */
-async function sendWebhook(participants, nameMap = new Map()) {
+async function sendWebhook(participants, discordClient) {
   try {
     let webhookUrl = (process.env.WHEEL_WEBSITE_WEBHOOK ?? '').trim();
     if (!webhookUrl) {
@@ -100,9 +100,21 @@ async function sendWebhook(participants, nameMap = new Map()) {
     const totalTickets   = participants.length;
     const uniqueEntrants = uniqueUserIds.length;
 
-    // Build the participants array using resolved display names where available,
-    // falling back to the raw user ID so the payload is always complete.
-    const participantNames = uniqueUserIds.map(uid => nameMap.get(uid) ?? uid);
+    // Resolve each user ID to a Discord username.  If the fetch fails (e.g. the
+    // user deleted their account or is otherwise unavailable) fall back to the
+    // raw user ID so the payload is always complete.
+    const participantNames = await Promise.all(
+      uniqueUserIds.map(async (uid) => {
+        if (!discordClient) return uid;
+        try {
+          const user = await discordClient.users.fetch(uid);
+          return user.username;
+        } catch {
+          log('WARN', `sendWebhook: could not fetch user ${uid} — using ID as fallback.`);
+          return uid;
+        }
+      })
+    );
 
     const payload = {
       action:         'update',
@@ -1330,8 +1342,9 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         // Notify the lottery wheel website of the updated participant list.
+        // Pass the Discord client so user IDs are resolved to real usernames.
         const allParticipants = getLotteryParticipants(db);
-        sendWebhook(allParticipants).catch(err => logError('buy: sendWebhook', err));
+        sendWebhook(allParticipants, client).catch(err => logError('buy: sendWebhook', err));
       }
 
       const newBalance = getBalance(user.id);
