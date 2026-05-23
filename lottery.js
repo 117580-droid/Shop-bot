@@ -344,7 +344,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
 
     // Build the flat display-name array here so it is available for both the
     // early 'start' webhook call and the spin animation later.
-    const participantNames = uniqueUserIds.map(uid => nameMap.get(uid) ?? `<@${uid}>`);
+    const participantNames = participants.map(p => nameMap.get(p.user_id) ?? `<@${p.user_id}>`);
 
     // ── Step 1: @everyone ping + initial countdown embed ─────────────────────
     // Derive the base website URL by stripping the /api/spin suffix from the
