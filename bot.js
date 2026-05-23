@@ -314,6 +314,37 @@ const callbackServer = http.createServer((req, res) => {
     return;
   }
 
+  // Purchase notification — the coin-shop website POSTs here when a user buys
+  // an item so the bot owner receives an immediate Discord DM.
+  if (req.method === 'POST' && req.url === '/api/purchase') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { userId, username, itemName, itemPrice } = JSON.parse(body);
+        log('INFO', `callbackServer: purchase notification — user: "${username}" (${userId}), item: "${itemName}", price: ${itemPrice}`);
+
+        try {
+          const owner = await client.users.fetch(OWNER_ID);
+          await owner.send(
+            `🛍️ **Purchase Alert!**\n\n**User**: ${username}\n**Item**: ${itemName}\n**Price**: ${itemPrice} coin${itemPrice === 1 ? '' : 's'}`
+          );
+          log('INFO', 'callbackServer: purchase DM sent to owner.');
+        } catch (dmErr) {
+          logError('callbackServer: failed to DM owner about purchase', dmErr);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        logError('callbackServer: purchase parse error', err);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+      }
+    });
+    return;
+  }
+
   // Health check — useful for Railway's health probe.
   if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
