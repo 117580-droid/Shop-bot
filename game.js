@@ -358,9 +358,91 @@ function buildHintsText(game) {
     .join('\n');
 }
 
+// ─── Wheel graphic helpers ────────────────────────────────────────────────────
+
+// Outer-ring segments used to build the visual wheel.  Each position in the
+// ring is one "slot"; the pointer (▼) always sits above index 0.
+const WHEEL_SEGMENTS = ['🎡', '🎰', '🎲', '🎯', '⚡', '💫', '🌀', '🔄'];
+
+/**
+ * Build a text-art spinning wheel embed.
+ *
+ * The wheel is rendered as a fixed-width ring of emoji segments with a ▼
+ * pointer above the top slot.  The currently "selected" POI name is shown
+ * prominently in the description, and the POI image is set as the thumbnail
+ * so players can see the location while the wheel spins.
+ *
+ * @param {{name:string,image:string}} selectedPoi  POI currently at the top.
+ * @param {Array<{name:string,image:string}>} pois  Full POI list (for ring labels).
+ * @param {boolean} isSpinning  true → spinning state; false → landed state.
+ * @param {number}  rotationOffset  How many positions the ring has rotated.
+ * @returns {EmbedBuilder}
+ */
+function generateWheelEmbed(selectedPoi, pois, isSpinning, rotationOffset = 0) {
+  // ── Build the visual ring ────────────────────────────────────────────────
+  // We show WHEEL_SEGMENTS.length slots around the ring.  The segment at
+  // position 0 (top-centre) is always the "selected" one.
+  const ringSize   = WHEEL_SEGMENTS.length;
+  const ringEmojis = [];
+  for (let i = 0; i < ringSize; i++) {
+    // Rotate the segment array so a different emoji sits at the top each frame.
+    ringEmojis.push(WHEEL_SEGMENTS[(i + rotationOffset) % ringSize]);
+  }
+
+  // Split the ring into top-row (3 slots), sides (1 slot each), bottom-row (3 slots).
+  // Layout (indices):
+  //   top:    [7] [0] [1]
+  //   sides:  [6]     [2]
+  //   bottom: [5] [4] [3]
+  const top    = `${ringEmojis[7]}  ${ringEmojis[0]}  ${ringEmojis[1]}`;
+  const mid    = `${ringEmojis[6]}        ${ringEmojis[2]}`;
+  const bot    = `${ringEmojis[5]}  ${ringEmojis[4]}  ${ringEmojis[3]}`;
+
+  // Pointer sits above the top-centre slot.
+  const pointer = isSpinning ? '　　　　▼' : '　　　　🎯';
+
+  // ── Status line ──────────────────────────────────────────────────────────
+  const statusLine = isSpinning
+    ? `🌀  **Spinning…**  🌀`
+    : `🎯  **LANDED ON:**  🎯`;
+
+  // ── POI name display ─────────────────────────────────────────────────────
+  // Pad the name to a fixed width so the embed width stays stable across frames.
+  const poiDisplay = isSpinning
+    ? `\`${selectedPoi.name.padEnd(22)}\``
+    : `✨ **${selectedPoi.name}** ✨`;
+
+  // ── Assemble description ─────────────────────────────────────────────────
+  const description = [
+    pointer,
+    '```',
+    `┌─────────────────┐`,
+    `│  ${top}  │`,
+    `│  ${mid}  │`,
+    `│  ${bot}  │`,
+    `└─────────────────┘`,
+    '```',
+    statusLine,
+    poiDisplay,
+  ].join('\n');
+
+  // ── Embed colour: blue while spinning, gold when landed ──────────────────
+  const color = isSpinning ? 0x5865F2 : 0xFEE75C;
+
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(isSpinning ? '🎡 Spinning the Wheel…' : '🎯 The Wheel Has Landed!')
+    .setDescription(description)
+    .setThumbnail(selectedPoi.image)
+    .setFooter({ text: selectedPoi.name })
+    .setTimestamp();
+}
+
 // ─── Spin-wheel animation ─────────────────────────────────────────────────────
-// Cycles through random POI images in the embed thumbnail with a slot-machine
-// style deceleration, then resolves once the final frame has been shown.
+// Renders a live visual lottery wheel that rotates through POI names with a
+// slot-machine style deceleration, then resolves once the final frame has been
+// shown.  Each frame edits the deferred reply in-place so the wheel appears to
+// spin inside a single Discord message.
 //
 // Schedule (total ≈ 5.4 s, 14 frames):
 //   Frames 1-5  → 150 ms apart  (fast spin)
@@ -381,43 +463,45 @@ async function spinWheelAnimation(interaction, pois, finalPoi) {
     150, 150, 150, 150, 150,   // frames 1-5  (fast)
     400, 400, 400, 400,        // frames 6-9  (medium)
     750, 750, 750,             // frames 10-12 (slow)
-    1000, 1000,                // frames 13-14 (very slow)
+    1000, 1000,                // frames 13-14 (very slow / dramatic)
   ];
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // Pick a random POI that is different from the one shown in the previous frame
-  // to avoid the same image appearing twice in a row.
+  // to avoid the same location appearing twice in a row.
   function pickRandom(excludeName) {
     const pool = pois.filter((p) => p.name !== excludeName);
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
-  // Spinning emoji sequence — cycles to give a visual "ticking" cue.
-  const spinEmojis = ['🌀', '⚡', '🎰', '🔄', '💫'];
+  // Initial message: show the wheel already spinning before the first frame.
+  try {
+    await interaction.editReply({
+      embeds: [generateWheelEmbed(pickRandom(null), pois, true, 0)],
+    });
+  } catch (err) {
+    logError('spinWheelAnimation: initial editReply', err);
+    return;
+  }
 
-  let lastShown = null;
+  let lastShown  = null;
+  let rotation   = 0; // tracks how far the ring has visually rotated
 
   for (let i = 0; i < delays.length; i++) {
+    await sleep(delays[i]);
+
     const isLastFrame = i === delays.length - 1;
     const framePoi    = isLastFrame ? finalPoi : pickRandom(lastShown?.name);
     lastShown         = framePoi;
 
-    const spinEmoji = spinEmojis[i % spinEmojis.length];
-    const label     = isLastFrame
-      ? '🎯 Landing...'
-      : `${spinEmoji} Spinning the wheel...`;
+    // Advance the ring rotation: fast frames jump 3 positions, slow frames 1.
+    const jump = i < 5 ? 3 : i < 9 ? 2 : 1;
+    rotation   = (rotation + jump) % WHEEL_SEGMENTS.length;
 
     try {
       await interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle(label)
-            .setThumbnail(framePoi.image)
-            .setFooter({ text: framePoi.name })
-            .setTimestamp(),
-        ],
+        embeds: [generateWheelEmbed(framePoi, pois, !isLastFrame, rotation)],
       });
     } catch (err) {
       // If the interaction token expired or the edit failed, abort gracefully
@@ -425,8 +509,6 @@ async function spinWheelAnimation(interaction, pois, finalPoi) {
       logError('spinWheelAnimation: editReply', err);
       return;
     }
-
-    await sleep(delays[i]);
   }
 }
 
