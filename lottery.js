@@ -455,17 +455,19 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     await sleep(1_000);
 
     // ── Step 3: Visual spinning wheel animation ───────────────────────────────
-    // Deceleration schedule (ms per frame) — mirrors the POI game wheel.
-    // Total duration ≈ 5.4 s across 14 intermediate frames.
-    //   Frames 1-5  → 150 ms  (fast spin)
-    //   Frames 6-9  → 400 ms  (slowing down)
-    //   Frames 10-12 → 750 ms (crawling)
-    //   Frames 13-14 → 1 000 ms (dramatic pause before landing)
-    const spinDelays = [
-      150, 150, 150, 150, 150,   // frames 1-5  (fast)
-      400, 400, 400, 400,        // frames 6-9  (medium)
-      750, 750, 750,             // frames 10-12 (slow)
-      1000, 1000,                // frames 13-14 (very slow / dramatic)
+    // Smooth deceleration schedule — 40 frames across ~14 s total.
+    // Each entry is [delayMs, rotationIncrement] so the wheel decelerates
+    // gradually rather than jumping between a handful of discrete speeds.
+    //   Frames  1-10 →  80 ms, +0.8 rotation  (fast spin)
+    //   Frames 11-20 → 150 ms, +0.6 rotation  (slowing down)
+    //   Frames 21-30 → 300 ms, +0.4 rotation  (crawling)
+    //   Frames 31-40 → 600 ms, +0.2 rotation  (dramatic deceleration)
+    const spinFrames = [
+      // [delayMs, rotationIncrement]
+      ...Array(10).fill([  80, 0.8]),   // frames  1-10 (fast)
+      ...Array(10).fill([ 150, 0.6]),   // frames 11-20 (medium)
+      ...Array(10).fill([ 300, 0.4]),   // frames 21-30 (slow)
+      ...Array(10).fill([ 600, 0.2]),   // frames 31-40 (very slow / dramatic)
     ];
 
     // Pick a random name that differs from the previously shown one.
@@ -491,20 +493,21 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     if (spinMsg) {
       let lastShownName = null;
 
-      for (let i = 0; i < spinDelays.length; i++) {
-        await sleep(spinDelays[i]);
+      for (let i = 0; i < spinFrames.length; i++) {
+        const [frameDelay, frameIncrement] = spinFrames[i];
+        await sleep(frameDelay);
 
-        const isLastFrame = i === spinDelays.length - 1;
+        const isLastFrame = i === spinFrames.length - 1;
 
         // On the very last intermediate frame we still show a random name —
         // the actual winner is revealed in Step 5 via a separate edit.
         const frameName = pickRandomName(lastShownName);
         lastShownName   = frameName;
 
-        // Advance the ring rotation: fast frames jump 3 positions, slow frames 1.
-        // Modulo by the number of participants (min 1) so the index stays in range.
-        const jump = i < 5 ? 3 : i < 9 ? 2 : 1;
-        rotation   = (rotation + jump) % Math.max(participantNames.length, 1);
+        // Advance the ring rotation by the frame's increment (fractional values
+        // are floored so the slot index stays a whole number, but the accumulated
+        // fractional part carries over to keep the deceleration smooth).
+        rotation = (rotation + frameIncrement) % Math.max(participantNames.length, 1);
 
         try {
           await spinMsg.edit({
