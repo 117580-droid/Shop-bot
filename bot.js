@@ -1284,10 +1284,14 @@ client.on('interactionCreate', async (interaction) => {
         // new entrants in real-time without waiting for /spinwheel to be run.
         // Fire-and-forget — a webhook failure must never block the purchase flow.
         try {
+          log('INFO', `buy: lottery ticket purchased by ${user.username} (${user.id}), quantity=${quantity}. Preparing webhook update.`);
+
           const allParticipants  = getLotteryParticipants(db);
           const totalTickets     = allParticipants.length;
           const uniqueUserIds    = [...new Set(allParticipants.map(p => p.user_id))];
           const uniqueEntrants   = uniqueUserIds.length;
+
+          log('INFO', `buy: lottery state — totalTickets=${totalTickets}, uniqueEntrants=${uniqueEntrants}`);
 
           // Resolve display names for every unique entrant.
           const nameEntries = await Promise.all(
@@ -1301,13 +1305,19 @@ client.on('interactionCreate', async (interaction) => {
             })
           );
 
+          log('INFO', `buy: resolved participant names — [${nameEntries.join(', ')}]`);
+          log('INFO', 'buy: calling sendWebhook with action=update…');
+
           await sendWebhook({
             action:         'update',
             participants:   nameEntries,
             totalTickets,
             uniqueEntrants,
           });
+
+          log('INFO', 'buy: sendWebhook call completed.');
         } catch (err) {
+          log('ERROR', `buy: lottery webhook update failed — ${err?.stack ?? err}`);
           logError('buy: lottery webhook update', err);
         }
       }
