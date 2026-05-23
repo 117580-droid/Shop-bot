@@ -142,6 +142,53 @@ async function sendWebhook(participants, discordClient) {
   }
 }
 
+// ─── Coin Shop Webhook ────────────────────────────────────────────────────────
+
+/**
+ * Send a synchronisation event to the coin-shop website.
+ *
+ * Supported actions:
+ *   'add'         — credit coins to a user   (payload: { userId, amount })
+ *   'add_item'    — add a shop item           (payload: { id, name, price, description })
+ *   'remove_item' — remove a shop item        (payload: { id })
+ *
+ * The webhook URL is always https://coin-shop-hub-production.up.railway.app/api/webhook/coins.
+ * Authentication uses two headers:
+ *   X-Webhook-Secret  — the shared secret (WEBHOOK_SECRET env var)
+ *   X-Owner-Id        — the bot owner's Discord user ID (OWNER_ID env var)
+ *
+ * All errors are caught and logged so a webhook failure never interrupts the
+ * command flow.
+ *
+ * @param {object} payload  The JSON body to send (must include an `action` key).
+ */
+async function sendCoinShopWebhook(payload) {
+  const COIN_SHOP_WEBHOOK_URL = 'https://coin-shop-hub-production.up.railway.app/api/webhook/coins';
+  const webhookSecret = (process.env.WEBHOOK_SECRET ?? '4sc39e1za0zx0b0h4t521umkzmrb3ci9').trim();
+
+  try {
+    log('INFO', `sendCoinShopWebhook: action=${payload.action} — sending to ${COIN_SHOP_WEBHOOK_URL}`);
+
+    const response = await fetch(COIN_SHOP_WEBHOOK_URL, {
+      method:  'POST',
+      headers: {
+        'Content-Type':    'application/json',
+        'X-Webhook-Secret': webhookSecret,
+        'X-Owner-Id':       OWNER_ID ?? '',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      log('WARN', `sendCoinShopWebhook: received HTTP ${response.status} from coin-shop website.`);
+    } else {
+      log('INFO', `sendCoinShopWebhook: coin-shop website notified successfully (HTTP ${response.status}).`);
+    }
+  } catch (err) {
+    logError('sendCoinShopWebhook', err);
+  }
+}
+
 // ─── Moderation Helpers ───────────────────────────────────────────────────────
 
 /**
@@ -1221,6 +1268,22 @@ client.on('interactionCreate', async (interaction) => {
         return await safeReply(interaction, { content: '❌ Failed to add item due to a database error.', ephemeral: true });
       }
 
+      // Fetch the newly-inserted item to get its auto-generated ID.
+      const newItem = getItem(name);
+
+      // Sync the new item to the website in the background.
+      if (newItem) {
+        sendCoinShopWebhook({
+          action:      'add_item',
+          id:          newItem.id,
+          name:        newItem.name,
+          price:       newItem.price,
+          description: newItem.description,
+        }).catch(err => logError('additem: sendCoinShopWebhook', err));
+      }
+
+      log('INFO', `additem: ${user.username} (${user.id}) added shop item "${name}" (id=${newItem?.id}) at ${price} coins.`);
+
       const embed = new EmbedBuilder()
         .setColor(0x57F287)
         .setTitle('✅ Item Added to Shop')
@@ -1271,6 +1334,12 @@ client.on('interactionCreate', async (interaction) => {
         logError('removeitem DB delete', err);
         return await safeReply(interaction, { content: '❌ Failed to remove item due to a database error.', ephemeral: true });
       }
+
+      // Sync the removal to the website in the background.
+      sendCoinShopWebhook({
+        action: 'remove_item',
+        id:     item.id,
+      }).catch(err => logError('removeitem: sendCoinShopWebhook', err));
 
       log('INFO', `removeitem: owner ${user.username} (${user.id}) removed shop item "${item.name}" (id=${item.id}).`);
       return await safeReply(interaction, {
@@ -1572,6 +1641,15 @@ client.on('interactionCreate', async (interaction) => {
 
       updateBalance(target.id, amount);
       const newBal = getBalance(target.id);
+
+      // Sync the coin change to the website in the background.
+      sendCoinShopWebhook({
+        action: 'add',
+        userId: target.id,
+        amount,
+      }).catch(err => logError('givecoin: sendCoinShopWebhook', err));
+
+      log('INFO', `givecoin: ${user.username} (${user.id}) gave ${amount} coins to ${target.username} (${target.id}). New balance: ${newBal}.`);
 
       return await safeReply(interaction, {
         embeds: [
