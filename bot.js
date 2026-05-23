@@ -775,6 +775,11 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('resetallcoins')
+    .setDescription('Reset all users\' coins to 0 (Owner only)')
+    .setDMPermission(true),
+
+  new SlashCommandBuilder()
     .setName('shutdown')
     .setDescription('Shut down the bot (owner only)')
     .setDMPermission(true),
@@ -2267,6 +2272,55 @@ client.on('interactionCreate', async (interaction) => {
         content: `✅ Announcement sent to **${successCount}** server${successCount !== 1 ? 's' : ''}${failCount > 0 ? ` (failed to reach ${failCount})` : ''}.`,
         ephemeral: true,
       });
+    }
+
+    // ── /resetallcoins ────────────────────────────────────────────────────────
+    if (commandName === 'resetallcoins') {
+      // Owner-only guard
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
+      try {
+        // Fetch all users that currently have coins before wiping them
+        const affectedUsers = db.prepare(
+          'SELECT user_id, balance FROM user_balances WHERE balance > 0'
+        ).all();
+
+        // Reset every balance to 0 in one statement
+        db.prepare('UPDATE user_balances SET balance = 0').run();
+
+        // Sync each affected user to the website (set their coins to 0)
+        for (const row of affectedUsers) {
+          sendCoinShopWebhook({
+            action: 'set',
+            userId: row.user_id,
+            coins:  0,
+          }).catch(err => logError('resetallcoins: sendCoinShopWebhook', err));
+        }
+
+        log('INFO', `Owner reset all user coins. ${affectedUsers.length} user(s) affected.`);
+
+        return await safeReply(interaction, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xED4245)
+              .setTitle('🪙 Economy Reset')
+              .setDescription(`✓ Reset all users' coins to 0. **${affectedUsers.length}** user${affectedUsers.length !== 1 ? 's' : ''} affected.`)
+              .setFooter({ text: `Reset by ${user.username}` })
+              .setTimestamp()
+          ],
+        });
+      } catch (err) {
+        logError('resetallcoins', err);
+        return await safeReply(interaction, {
+          content: '❌ Failed to reset coins due to a database error.',
+          ephemeral: true,
+        });
+      }
     }
 
     // ── /shutdown ─────────────────────────────────────────────────────────────
