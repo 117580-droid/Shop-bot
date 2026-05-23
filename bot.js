@@ -886,6 +886,80 @@ async function executeMute(guild, userId, durationMinutes, warningLevel, clientR
   return true;
 }
 
+// ─── Auto-Sync: Bot → Website ─────────────────────────────────────────────────
+//
+// Every 5 minutes the bot pushes the full state of user_balances and shop_items
+// to the coin-shop website via the existing sendCoinShopWebhook() helper.
+//
+// • action: 'set'         — overwrite a user's balance with the exact DB value
+// • action: 'update_item' — upsert a shop item (create or update by id/name)
+//
+// Each webhook call is individually wrapped in try-catch so a single failure
+// (e.g. a transient network error for one user) never aborts the rest of the
+// sync pass.
+
+/**
+ * Push all user balances and shop items to the coin-shop website in one pass.
+ * Logs a summary line when complete.
+ */
+async function syncAllDataToWebsite() {
+  let usersSynced = 0;
+  let itemsSynced = 0;
+
+  // ── Sync user balances ────────────────────────────────────────────────────
+  let users = [];
+  try {
+    users = db.prepare('SELECT user_id, balance FROM user_balances').all();
+  } catch (err) {
+    logError('syncAllDataToWebsite: query user_balances', err);
+  }
+
+  for (const row of users) {
+    try {
+      await sendCoinShopWebhook({ action: 'set', userId: row.user_id, balance: row.balance });
+      usersSynced++;
+    } catch (err) {
+      logError(`syncAllDataToWebsite: sync user ${row.user_id}`, err);
+    }
+  }
+
+  // ── Sync shop items ───────────────────────────────────────────────────────
+  const items = getAllItems();
+
+  for (const item of items) {
+    try {
+      await sendCoinShopWebhook({
+        action:      'update_item',
+        id:          item.id,
+        name:        item.name,
+        price:       item.price,
+        description: item.description,
+        stock:       item.stock,
+      });
+      itemsSynced++;
+    } catch (err) {
+      logError(`syncAllDataToWebsite: sync item ${item.id} (${item.name})`, err);
+    }
+  }
+
+  log('INFO', `✓ Synced ${usersSynced} users and ${itemsSynced} items to website`);
+}
+
+/**
+ * Start the background auto-sync task.
+ * Calls syncAllDataToWebsite() immediately on start, then every 5 minutes.
+ */
+function startAutoSync() {
+  log('INFO', 'Auto-sync started: syncing every 5 minutes');
+
+  // Run once immediately so the website is up-to-date as soon as the bot connects.
+  syncAllDataToWebsite().catch(err => logError('startAutoSync: initial sync', err));
+
+  setInterval(() => {
+    syncAllDataToWebsite().catch(err => logError('startAutoSync: periodic sync', err));
+  }, 300_000); // 5 minutes
+}
+
 client.once('ready', async () => {
   log('INFO', `Logged in as ${client.user.tag}`);
 
@@ -934,6 +1008,9 @@ client.once('ready', async () => {
     }
   }, 60 * 1000); // check every minute
   log('INFO', 'Daily hint scheduler started (fires at 00:00 UTC).');
+
+  // ── Auto-sync bot data to website ─────────────────────────────────────────
+  startAutoSync();
 
   // ── Notify owner that the bot is online ──────────────────────────────────
   if (OWNER_ID) {
