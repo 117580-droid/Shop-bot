@@ -1271,6 +1271,13 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
+      // ── Lottery confirmation for "50 WIN LOTTERY" ────────────────────────────
+      if (itemName.toUpperCase() === '50 WIN LOTTERY') {
+        // Just confirm the purchase — the wheel is only spun when an admin runs /spinwheel.
+        embed.setDescription('🎡 You bought a lottery ticket! You\'re now in the wheel. An admin will spin it soon.');
+        return await safeReply(interaction, { embeds: [embed] });
+      }
+
       return await safeReply(interaction, { embeds: [embed] });
     }
 
