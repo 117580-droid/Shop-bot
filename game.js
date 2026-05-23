@@ -4,7 +4,7 @@ const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('disc
 // Individual POI images are hosted in the /pois folder on GitHub and served via
 // the raw.githubusercontent.com CDN. Each key maps to a direct PNG URL using
 // the format:
-//   https://raw.githubusercontent.com/117580-droid/Shop-bot/main/pois/{poi-name}.png
+//   https://raw.githubusercontent.com/117580-droid/Shop-bot/sandbox/3a54afec-b06b-4e0a-bb11--oau7/pois/{poi-name}.png
 // where {poi-name} is the POI name lowercased with spaces replaced by hyphens
 // (apostrophes removed). Example: "Chonker's Speedway" → "chonkers-speedway.png"
 //
@@ -18,80 +18,80 @@ const POI_FALLBACK = 'https://cdn2.unrealengine.com/Fortnite/fortnite-game/battl
 
 // Base URL for POI images hosted in the /pois folder on GitHub.
 // Usage: `${POI_IMG_BASE}{poi-name}.png`  (name lowercased, spaces → hyphens, apostrophes removed)
-const POI_IMG_BASE = 'https://raw.githubusercontent.com/117580-droid/Shop-bot/main/pois/';
+const POI_IMG_BASE = 'https://raw.githubusercontent.com/117580-droid/Shop-bot/sandbox/3a54afec-b06b-4e0a-bb11--oau7/pois/';
 
 const POI_IMAGES = {
   // ── Chapter 1 ──────────────────────────────────────────────────────────────
-  'Anarchy Acres':  POI_FALLBACK, // → pois/anarchy-acres.png
-  'Dusty Depot':    POI_FALLBACK, // → pois/dusty-depot.png
-  'Fatal Fields':   POI_FALLBACK, // → pois/fatal-fields.png
-  'Flush Factory':  POI_FALLBACK, // → pois/flush-factory.png
-  'Greasy Grove':   POI_FALLBACK, // → pois/greasy-grove.png
-  'Haunted Hills':  POI_FALLBACK, // → pois/haunted-hills.png
-  'Junk Junction':  POI_FALLBACK, // → pois/junk-junction.png
-  'Lazy Links':     POI_FALLBACK, // → pois/lazy-links.png
-  'Lonely Lodge':   POI_FALLBACK, // → pois/lonely-lodge.png
-  'Loot Lake':      POI_FALLBACK, // → pois/loot-lake.png
-  'Lucky Landing':  POI_FALLBACK, // → pois/lucky-landing.png
-  'Moisty Mire':    POI_FALLBACK, // → pois/moisty-mire.png
-  'Pleasant Park':  POI_FALLBACK, // → pois/pleasant-park.png
-  'Retail Row':     POI_FALLBACK, // → pois/retail-row.png
-  'Risky Reels':    POI_FALLBACK, // → pois/risky-reels.png
-  'Salty Springs':  POI_FALLBACK, // → pois/salty-springs.png
-  'Shifty Shafts':  POI_FALLBACK, // → pois/shifty-shafts.png
-  'Snobby Shores':  POI_FALLBACK, // → pois/snobby-shores.png
-  'Tilted Towers':  POI_FALLBACK, // → pois/tilted-towers.png
-  'Tomato Town':    POI_FALLBACK, // → pois/tomato-town.png
-  'Wailing Woods':  POI_FALLBACK, // → pois/wailing-woods.png
+  'Anarchy Acres': `${POI_IMG_BASE}anarchy-acres.png`,
+  'Dusty Depot': `${POI_IMG_BASE}dusty-depot.png`,
+  'Fatal Fields': `${POI_IMG_BASE}fatal-fields.png`,
+  'Flush Factory': `${POI_IMG_BASE}flush-factory.png`,
+  'Greasy Grove': `${POI_IMG_BASE}greasy-grove.png`,
+  'Haunted Hills': `${POI_IMG_BASE}haunted-hills.png`,
+  'Junk Junction': `${POI_IMG_BASE}junk-junction.png`,
+  'Lazy Links': `${POI_IMG_BASE}lazy-links.png`,
+  'Lonely Lodge': `${POI_IMG_BASE}lonely-lodge.png`,
+  'Loot Lake': `${POI_IMG_BASE}loot-lake.png`,
+  'Lucky Landing': `${POI_IMG_BASE}lucky-landing.png`,
+  'Moisty Mire': `${POI_IMG_BASE}moisty-mire.png`,
+  'Pleasant Park': `${POI_IMG_BASE}pleasant-park.png`,
+  'Retail Row': `${POI_IMG_BASE}retail-row.png`,
+  'Risky Reels': `${POI_IMG_BASE}risky-reels.png`,
+  'Salty Springs': `${POI_IMG_BASE}salty-springs.png`,
+  'Shifty Shafts': `${POI_IMG_BASE}shifty-shafts.png`,
+  'Snobby Shores': `${POI_IMG_BASE}snobby-shores.png`,
+  'Tilted Towers': `${POI_IMG_BASE}tilted-towers.png`,
+  'Tomato Town': `${POI_IMG_BASE}tomato-town.png`,
+  'Wailing Woods': `${POI_IMG_BASE}wailing-woods.png`,
   // ── Chapter 2 ──────────────────────────────────────────────────────────────
-  'The Agency':        POI_FALLBACK, // → pois/the-agency.png
-  'Craggy Cliffs':     POI_FALLBACK, // → pois/craggy-cliffs.png
-  'Dirty Docks':       POI_FALLBACK, // → pois/dirty-docks.png
-  'Frenzy Farm':       POI_FALLBACK, // → pois/frenzy-farm.png
-  'Holly Hedges':      POI_FALLBACK, // → pois/holly-hedges.png
-  'Lazy Lake':         POI_FALLBACK, // → pois/lazy-lake.png
-  'Misty Meadows':     POI_FALLBACK, // → pois/misty-meadows.png
-  'Slurpy Swamp':      POI_FALLBACK, // → pois/slurpy-swamp.png
-  'Steamy Stacks':     POI_FALLBACK, // → pois/steamy-stacks.png
-  'Sweaty Sands':      POI_FALLBACK, // → pois/sweaty-sands.png
-  'The Fortilla':      POI_FALLBACK, // → pois/the-fortilla.png
-  'The Grotto':        POI_FALLBACK, // → pois/the-grotto.png
-  'The Shark':         POI_FALLBACK, // → pois/the-shark.png
-  'Weeping Woods':     POI_FALLBACK, // → pois/weeping-woods.png
+  'The Agency': `${POI_IMG_BASE}the-agency.png`,
+  'Craggy Cliffs': `${POI_IMG_BASE}craggy-cliffs.png`,
+  'Dirty Docks': `${POI_IMG_BASE}dirty-docks.png`,
+  'Frenzy Farm': `${POI_IMG_BASE}frenzy-farm.png`,
+  'Holly Hedges': `${POI_IMG_BASE}holly-hedges.png`,
+  'Lazy Lake': `${POI_IMG_BASE}lazy-lake.png`,
+  'Misty Meadows': `${POI_IMG_BASE}misty-meadows.png`,
+  'Slurpy Swamp': `${POI_IMG_BASE}slurpy-swamp.png`,
+  'Steamy Stacks': `${POI_IMG_BASE}steamy-stacks.png`,
+  'Sweaty Sands': `${POI_IMG_BASE}sweaty-sands.png`,
+  'The Fortilla': `${POI_IMG_BASE}the-fortilla.png`,
+  'The Grotto': `${POI_IMG_BASE}the-grotto.png`,
+  'The Shark': `${POI_IMG_BASE}the-shark.png`,
+  'Weeping Woods': `${POI_IMG_BASE}weeping-woods.png`,
   // ── Chapter 3 ──────────────────────────────────────────────────────────────
-  'Camp Cuddle':        POI_FALLBACK, // → pois/camp-cuddle.png
-  "Chonker's Speedway": POI_FALLBACK, // → pois/chonkers-speedway.png
-  'Condo Canyon':       POI_FALLBACK, // → pois/condo-canyon.png
-  'Coney Crossroads':   POI_FALLBACK, // → pois/coney-crossroads.png
-  'Daily Bugle':        POI_FALLBACK, // → pois/daily-bugle.png
-  'Logjam Lumberyard':  POI_FALLBACK, // → pois/logjam-lumberyard.png
-  'Rocky Reels':        POI_FALLBACK, // → pois/rocky-reels.png
-  'Sanctuary':          POI_FALLBACK, // → pois/sanctuary.png
-  'Sleepy Sound':       POI_FALLBACK, // → pois/sleepy-sound.png
-  'Synapse Station':    POI_FALLBACK, // → pois/synapse-station.png
-  'The Joneses':        POI_FALLBACK, // → pois/the-joneses.png
+  'Camp Cuddle': `${POI_IMG_BASE}camp-cuddle.png`,
+  "Chonker's Speedway": `${POI_IMG_BASE}chonkers-speedway.png`,
+  'Condo Canyon': `${POI_IMG_BASE}condo-canyon.png`,
+  'Coney Crossroads': `${POI_IMG_BASE}coney-crossroads.png`,
+  'Daily Bugle': `${POI_IMG_BASE}daily-bugle.png`,
+  'Logjam Lumberyard': `${POI_IMG_BASE}logjam-lumberyard.png`,
+  'Rocky Reels': `${POI_IMG_BASE}rocky-reels.png`,
+  'Sanctuary': `${POI_IMG_BASE}sanctuary.png`,
+  'Sleepy Sound': `${POI_IMG_BASE}sleepy-sound.png`,
+  'Synapse Station': `${POI_IMG_BASE}synapse-station.png`,
+  'The Joneses': `${POI_IMG_BASE}the-joneses.png`,
   // ── Chapter 4 ──────────────────────────────────────────────────────────────
-  'Anvil Square':      POI_FALLBACK, // → pois/anvil-square.png
-  'Brutal Bastion':    POI_FALLBACK, // → pois/brutal-bastion.png
-  'Breakwater Bay':    POI_FALLBACK, // → pois/breakwater-bay.png
-  'Faulty Splits':     POI_FALLBACK, // → pois/faulty-splits.png
-  'Frenzy Fields':     POI_FALLBACK, // → pois/frenzy-fields.png
-  'Lonely Labs':       POI_FALLBACK, // → pois/lonely-labs.png
-  'Mega City':         POI_FALLBACK, // → pois/mega-city.png
-  'Shattered Slabs':   POI_FALLBACK, // → pois/shattered-slabs.png
-  'Slappy Shores':     POI_FALLBACK, // → pois/slappy-shores.png
-  'Steamy Springs':    POI_FALLBACK, // → pois/steamy-springs.png
+  'Anvil Square': `${POI_IMG_BASE}anvil-square.png`,
+  'Brutal Bastion': `${POI_IMG_BASE}brutal-bastion.png`,
+  'Breakwater Bay': `${POI_IMG_BASE}breakwater-bay.png`,
+  'Faulty Splits': `${POI_IMG_BASE}faulty-splits.png`,
+  'Frenzy Fields': `${POI_IMG_BASE}frenzy-fields.png`,
+  'Lonely Labs': `${POI_IMG_BASE}lonely-labs.png`,
+  'Mega City': `${POI_IMG_BASE}mega-city.png`,
+  'Shattered Slabs': `${POI_IMG_BASE}shattered-slabs.png`,
+  'Slappy Shores': `${POI_IMG_BASE}slappy-shores.png`,
+  'Steamy Springs': `${POI_IMG_BASE}steamy-springs.png`,
   // ── Chapter 5 ──────────────────────────────────────────────────────────────
-  'Classy Courts':     POI_FALLBACK, // → pois/classy-courts.png
-  'Fencing Fields':    POI_FALLBACK, // → pois/fencing-fields.png
-  'Grand Glacier':     POI_FALLBACK, // → pois/grand-glacier.png
-  'Hazy Hillside':     POI_FALLBACK, // → pois/hazy-hillside.png
-  'Lavish Lair':       POI_FALLBACK, // → pois/lavish-lair.png
-  'Pleasant Piazza':   POI_FALLBACK, // → pois/pleasant-piazza.png
-  'Reckless Railways': POI_FALLBACK, // → pois/reckless-railways.png
-  'Ritzy Riviera':     POI_FALLBACK, // → pois/ritzy-riviera.png
-  'Ruined Reels':      POI_FALLBACK, // → pois/ruined-reels.png
-  'Snooty Steppes':    POI_FALLBACK, // → pois/snooty-steppes.png
+  'Classy Courts': `${POI_IMG_BASE}classy-courts.png`,
+  'Fencing Fields': `${POI_IMG_BASE}fencing-fields.png`,
+  'Grand Glacier': `${POI_IMG_BASE}grand-glacier.png`,
+  'Hazy Hillside': `${POI_IMG_BASE}hazy-hillside.png`,
+  'Lavish Lair': `${POI_IMG_BASE}lavish-lair.png`,
+  'Pleasant Piazza': `${POI_IMG_BASE}pleasant-piazza.png`,
+  'Reckless Railways': `${POI_IMG_BASE}reckless-railways.png`,
+  'Ritzy Riviera': `${POI_IMG_BASE}ritzy-riviera.png`,
+  'Ruined Reels': `${POI_IMG_BASE}ruined-reels.png`,
+  'Snooty Steppes': `${POI_IMG_BASE}snooty-steppes.png`,
 };
 
 const FORTNITE_POIS = [
@@ -358,6 +358,160 @@ function buildHintsText(game) {
     .join('\n');
 }
 
+// ─── Wheel graphic helpers ────────────────────────────────────────────────────
+
+// Outer-ring segments used to build the visual wheel.  Each position in the
+// ring is one "slot"; the pointer (▼) always sits above index 0.
+const WHEEL_SEGMENTS = ['🎡', '🎰', '🎲', '🎯', '⚡', '💫', '🌀', '🔄'];
+
+/**
+ * Build a text-art spinning wheel embed.
+ *
+ * The wheel is rendered as a fixed-width ring of emoji segments with a ▼
+ * pointer above the top slot.  The currently "selected" POI name is shown
+ * prominently in the description, and the POI image is set as the thumbnail
+ * so players can see the location while the wheel spins.
+ *
+ * @param {{name:string,image:string}} selectedPoi  POI currently at the top.
+ * @param {Array<{name:string,image:string}>} pois  Full POI list (for ring labels).
+ * @param {boolean} isSpinning  true → spinning state; false → landed state.
+ * @param {number}  rotationOffset  How many positions the ring has rotated.
+ * @returns {EmbedBuilder}
+ */
+function generateWheelEmbed(selectedPoi, pois, isSpinning, rotationOffset = 0) {
+  // ── Build the visual ring ────────────────────────────────────────────────
+  // We show WHEEL_SEGMENTS.length slots around the ring.  The segment at
+  // position 0 (top-centre) is always the "selected" one.
+  const ringSize   = WHEEL_SEGMENTS.length;
+  const ringEmojis = [];
+  for (let i = 0; i < ringSize; i++) {
+    // Rotate the segment array so a different emoji sits at the top each frame.
+    ringEmojis.push(WHEEL_SEGMENTS[(i + rotationOffset) % ringSize]);
+  }
+
+  // Split the ring into top-row (3 slots), sides (1 slot each), bottom-row (3 slots).
+  // Layout (indices):
+  //   top:    [7] [0] [1]
+  //   sides:  [6]     [2]
+  //   bottom: [5] [4] [3]
+  const top    = `${ringEmojis[7]}  ${ringEmojis[0]}  ${ringEmojis[1]}`;
+  const mid    = `${ringEmojis[6]}        ${ringEmojis[2]}`;
+  const bot    = `${ringEmojis[5]}  ${ringEmojis[4]}  ${ringEmojis[3]}`;
+
+  // Pointer sits above the top-centre slot.
+  const pointer = isSpinning ? '　　　　▼' : '　　　　🎯';
+
+  // ── Status line ──────────────────────────────────────────────────────────
+  const statusLine = isSpinning
+    ? `🌀  **Spinning…**  🌀`
+    : `🎯  **LANDED ON:**  🎯`;
+
+  // ── POI name display ─────────────────────────────────────────────────────
+  // Pad the name to a fixed width so the embed width stays stable across frames.
+  const poiDisplay = isSpinning
+    ? `\`${selectedPoi.name.padEnd(22)}\``
+    : `✨ **${selectedPoi.name}** ✨`;
+
+  // ── Assemble description ─────────────────────────────────────────────────
+  const description = [
+    pointer,
+    '```',
+    `┌─────────────────┐`,
+    `│  ${top}  │`,
+    `│  ${mid}  │`,
+    `│  ${bot}  │`,
+    `└─────────────────┘`,
+    '```',
+    statusLine,
+    poiDisplay,
+  ].join('\n');
+
+  // ── Embed colour: blue while spinning, gold when landed ──────────────────
+  const color = isSpinning ? 0x5865F2 : 0xFEE75C;
+
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(isSpinning ? '🎡 Spinning the Wheel…' : '🎯 The Wheel Has Landed!')
+    .setDescription(description)
+    .setThumbnail(selectedPoi.image)
+    .setFooter({ text: selectedPoi.name })
+    .setTimestamp();
+}
+
+// ─── Spin-wheel animation ─────────────────────────────────────────────────────
+// Renders a live visual lottery wheel that rotates through POI names with a
+// slot-machine style deceleration, then resolves once the final frame has been
+// shown.  Each frame edits the deferred reply in-place so the wheel appears to
+// spin inside a single Discord message.
+//
+// Schedule (total ≈ 5.4 s, 14 frames):
+//   Frames 1-5  → 150 ms apart  (fast spin)
+//   Frames 6-9  → 400 ms apart  (slowing down)
+//   Frames 10-12 → 750 ms apart (crawling)
+//   Frames 13-14 → 1 000 ms apart (dramatic pause before landing)
+//
+// The final editReply (the actual result) is NOT done here — the caller is
+// responsible for that so it can attach the correct colour, description, etc.
+//
+// @param {import('discord.js').ChatInputCommandInteraction} interaction
+//   Must already be deferred (deferReply called) before this is invoked.
+// @param {Array<{name:string,image:string}>} pois  Full POI list to sample from.
+// @param {{name:string,image:string}} finalPoi     The POI to land on last.
+async function spinWheelAnimation(interaction, pois, finalPoi) {
+  // Delay schedule in milliseconds — one entry per intermediate frame.
+  const delays = [
+    150, 150, 150, 150, 150,   // frames 1-5  (fast)
+    400, 400, 400, 400,        // frames 6-9  (medium)
+    750, 750, 750,             // frames 10-12 (slow)
+    1000, 1000,                // frames 13-14 (very slow / dramatic)
+  ];
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Pick a random POI that is different from the one shown in the previous frame
+  // to avoid the same location appearing twice in a row.
+  function pickRandom(excludeName) {
+    const pool = pois.filter((p) => p.name !== excludeName);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // Initial message: show the wheel already spinning before the first frame.
+  try {
+    await interaction.editReply({
+      embeds: [generateWheelEmbed(pickRandom(null), pois, true, 0)],
+    });
+  } catch (err) {
+    logError('spinWheelAnimation: initial editReply', err);
+    return;
+  }
+
+  let lastShown  = null;
+  let rotation   = 0; // tracks how far the ring has visually rotated
+
+  for (let i = 0; i < delays.length; i++) {
+    await sleep(delays[i]);
+
+    const isLastFrame = i === delays.length - 1;
+    const framePoi    = isLastFrame ? finalPoi : pickRandom(lastShown?.name);
+    lastShown         = framePoi;
+
+    // Advance the ring rotation: fast frames jump 3 positions, slow frames 1.
+    const jump = i < 5 ? 3 : i < 9 ? 2 : 1;
+    rotation   = (rotation + jump) % WHEEL_SEGMENTS.length;
+
+    try {
+      await interaction.editReply({
+        embeds: [generateWheelEmbed(framePoi, pois, !isLastFrame, rotation)],
+      });
+    } catch (err) {
+      // If the interaction token expired or the edit failed, abort gracefully
+      // rather than spamming errors for every remaining frame.
+      logError('spinWheelAnimation: editReply', err);
+      return;
+    }
+  }
+}
+
 // ─── Commands ─────────────────────────────────────────────────────────────────
 const commands = [
   new SlashCommandBuilder()
@@ -478,8 +632,12 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         return await safeReply(interaction, { content: '❌ Your guess cannot be empty.', ephemeral: true });
       }
 
+      // Defer the reply so we can edit it multiple times during the animation.
+      // All subsequent responses must use editReply / followUp.
+      await interaction.deferReply();
+
       if (guess.toLowerCase() === poi.name.toLowerCase()) {
-        // ✅ Correct!
+        // ✅ Correct! — run the wheel animation landing on the winning POI.
         updateBalance(user.id, 1);
         if (!isOwner) setCooldown(user.id);
         const newPoi = newRandomPoi();
@@ -496,22 +654,28 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
           0x57F287,
         );
 
-        return await safeReply(interaction, {
+        // Run the spinning animation — lands on the correct POI as the final frame.
+        await spinWheelAnimation(interaction, FORTNITE_POIS, poi);
+
+        // Final reveal: correct guess result.
+        return await interaction.editReply({
           embeds: [
             new EmbedBuilder()
               .setColor(0x57F287)
+              .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
                 `🪙 1 coin **${user.username}** found where **Sam** was hiding\n\n` +
                 (OWNER_ID ? `DM <@${OWNER_ID}> to claim your win!` : 'Contact the owner to claim your win!')
               )
+              .setFooter({ text: poi.name })
               .setTimestamp()
           ],
         });
 
-
       } else {
-        // ❌ Wrong guess — reveal current POI image then rotate to a new one.
+        // ❌ Wrong guess — run the wheel animation landing on the real POI,
+        //    then reveal it with the wrong-guess message.
         const revealedPoi = poi;
         if (!isOwner) setCooldown(user.id);
         newRandomPoi();
@@ -524,14 +688,20 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
           0xED4245,
         );
 
-        return await safeReply(interaction, {
+        // Run the spinning animation — lands on the actual POI as the final frame.
+        await spinWheelAnimation(interaction, FORTNITE_POIS, revealedPoi);
+
+        // Final reveal: wrong guess result.
+        return await interaction.editReply({
           embeds: [
             new EmbedBuilder()
               .setColor(0xED4245)
+              .setTitle('❌ Wrong Guess!')
               .setThumbnail(revealedPoi.image)
               .setDescription(`**Sam** was hiding at **${revealedPoi.name}**`)
+              .setFooter({ text: revealedPoi.name })
               .setTimestamp()
-          ]
+          ],
         });
       }
     }
