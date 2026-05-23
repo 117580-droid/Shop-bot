@@ -637,6 +637,12 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       // Non-fatal — the coins were still awarded and the result was posted publicly
     }
 
+    // ── Webhook: reset ────────────────────────────────────────────────────────
+    // Notify the website to clear all participants, the winner, and the timer so
+    // the wheel returns to an empty state ready for the next round.
+    // Fire-and-forget — failure must not affect the Discord flow.
+    await sendWebhook({ action: 'reset' });
+
   } catch (err) {
     logError('handleLottery', err);
     await safeReply(interaction, {
