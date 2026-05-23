@@ -341,6 +341,12 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
     const uniqueEntries = uniqueUserIds.length;
 
+    // ── Clear the DB immediately so new ticket purchases count toward the next round ──
+    // We already have the full participant snapshot above, so clearing now is safe.
+    // The website will continue showing names (via the 'start' webhook payload) until
+    // the 'reset' webhook is sent at the very end of this function.
+    clearLottery(db);
+
     // ── Step 0: Resolve display names ─────────────────────────────────────────
     const nameMap = new Map(); // userId → display name
     await Promise.all(
