@@ -455,19 +455,19 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     await sleep(1_000);
 
     // ── Step 3: Visual spinning wheel animation ───────────────────────────────
-    // Snappy deceleration schedule — 100 frames across ~3-4 s total.
-    // Each entry is [delayMs, rotationIncrement] so the wheel blazes through
-    // the fast phase and then decelerates aggressively into the final slot.
-    //   Frames  1-30 →  20 ms, +1.5 rotation  (super fast spin)
-    //   Frames 31-60 →  40 ms, +1.0 rotation  (still fast, starting to slow)
-    //   Frames 61-80 →  80 ms, +0.5 rotation  (slowing down)
-    //   Frames 81-100 → 150 ms, +0.2 rotation  (dramatic finish)
+    // 12 key-frames across ~4 s total.  Fewer edits means Discord has time to
+    // render each one, so every frame is a visible, dramatic jump rather than
+    // a flood of updates that get dropped or queued behind rate-limits.
+    //   Frames  1-4  → 150 ms, +3.0 rotation  (fast spin)
+    //   Frames  5-8  → 300 ms, +2.0 rotation  (medium)
+    //   Frames  9-11 → 500 ms, +1.0 rotation  (slowing)
+    //   Frame   12   → 800 ms, +0.5 rotation  (final)
     const spinFrames = [
       // [delayMs, rotationIncrement]
-      ...Array(30).fill([  20, 1.5]),   // frames  1-30 (super fast)
-      ...Array(30).fill([  40, 1.0]),   // frames 31-60 (fast, easing)
-      ...Array(20).fill([  80, 0.5]),   // frames 61-80 (slowing)
-      ...Array(20).fill([ 150, 0.2]),   // frames 81-100 (dramatic finish)
+      ...Array(4).fill([ 150, 3.0]),   // frames  1-4  (fast spin)
+      ...Array(4).fill([ 300, 2.0]),   // frames  5-8  (medium)
+      ...Array(3).fill([ 500, 1.0]),   // frames  9-11 (slowing)
+             [ 800, 0.5],              // frame   12   (final)
     ];
 
     // Pick a random name that differs from the previously shown one.
