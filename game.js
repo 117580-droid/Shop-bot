@@ -358,6 +358,78 @@ function buildHintsText(game) {
     .join('\n');
 }
 
+// ─── Spin-wheel animation ─────────────────────────────────────────────────────
+// Cycles through random POI images in the embed thumbnail with a slot-machine
+// style deceleration, then resolves once the final frame has been shown.
+//
+// Schedule (total ≈ 5.4 s, 14 frames):
+//   Frames 1-5  → 150 ms apart  (fast spin)
+//   Frames 6-9  → 400 ms apart  (slowing down)
+//   Frames 10-12 → 750 ms apart (crawling)
+//   Frames 13-14 → 1 000 ms apart (dramatic pause before landing)
+//
+// The final editReply (the actual result) is NOT done here — the caller is
+// responsible for that so it can attach the correct colour, description, etc.
+//
+// @param {import('discord.js').ChatInputCommandInteraction} interaction
+//   Must already be deferred (deferReply called) before this is invoked.
+// @param {Array<{name:string,image:string}>} pois  Full POI list to sample from.
+// @param {{name:string,image:string}} finalPoi     The POI to land on last.
+async function spinWheelAnimation(interaction, pois, finalPoi) {
+  // Delay schedule in milliseconds — one entry per intermediate frame.
+  const delays = [
+    150, 150, 150, 150, 150,   // frames 1-5  (fast)
+    400, 400, 400, 400,        // frames 6-9  (medium)
+    750, 750, 750,             // frames 10-12 (slow)
+    1000, 1000,                // frames 13-14 (very slow)
+  ];
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Pick a random POI that is different from the one shown in the previous frame
+  // to avoid the same image appearing twice in a row.
+  function pickRandom(excludeName) {
+    const pool = pois.filter((p) => p.name !== excludeName);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // Spinning emoji sequence — cycles to give a visual "ticking" cue.
+  const spinEmojis = ['🌀', '⚡', '🎰', '🔄', '💫'];
+
+  let lastShown = null;
+
+  for (let i = 0; i < delays.length; i++) {
+    const isLastFrame = i === delays.length - 1;
+    const framePoi    = isLastFrame ? finalPoi : pickRandom(lastShown?.name);
+    lastShown         = framePoi;
+
+    const spinEmoji = spinEmojis[i % spinEmojis.length];
+    const label     = isLastFrame
+      ? '🎯 Landing...'
+      : `${spinEmoji} Spinning the wheel...`;
+
+    try {
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle(label)
+            .setThumbnail(framePoi.image)
+            .setFooter({ text: framePoi.name })
+            .setTimestamp(),
+        ],
+      });
+    } catch (err) {
+      // If the interaction token expired or the edit failed, abort gracefully
+      // rather than spamming errors for every remaining frame.
+      logError('spinWheelAnimation: editReply', err);
+      return;
+    }
+
+    await sleep(delays[i]);
+  }
+}
+
 // ─── Commands ─────────────────────────────────────────────────────────────────
 const commands = [
   new SlashCommandBuilder()
@@ -478,8 +550,12 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         return await safeReply(interaction, { content: '❌ Your guess cannot be empty.', ephemeral: true });
       }
 
+      // Defer the reply so we can edit it multiple times during the animation.
+      // All subsequent responses must use editReply / followUp.
+      await interaction.deferReply();
+
       if (guess.toLowerCase() === poi.name.toLowerCase()) {
-        // ✅ Correct!
+        // ✅ Correct! — run the wheel animation landing on the winning POI.
         updateBalance(user.id, 1);
         if (!isOwner) setCooldown(user.id);
         const newPoi = newRandomPoi();
@@ -496,22 +572,28 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
           0x57F287,
         );
 
-        return await safeReply(interaction, {
+        // Run the spinning animation — lands on the correct POI as the final frame.
+        await spinWheelAnimation(interaction, FORTNITE_POIS, poi);
+
+        // Final reveal: correct guess result.
+        return await interaction.editReply({
           embeds: [
             new EmbedBuilder()
               .setColor(0x57F287)
+              .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
                 `🪙 1 coin **${user.username}** found where **Sam** was hiding\n\n` +
                 (OWNER_ID ? `DM <@${OWNER_ID}> to claim your win!` : 'Contact the owner to claim your win!')
               )
+              .setFooter({ text: poi.name })
               .setTimestamp()
           ],
         });
 
-
       } else {
-        // ❌ Wrong guess — reveal current POI image then rotate to a new one.
+        // ❌ Wrong guess — run the wheel animation landing on the real POI,
+        //    then reveal it with the wrong-guess message.
         const revealedPoi = poi;
         if (!isOwner) setCooldown(user.id);
         newRandomPoi();
@@ -524,14 +606,20 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
           0xED4245,
         );
 
-        return await safeReply(interaction, {
+        // Run the spinning animation — lands on the actual POI as the final frame.
+        await spinWheelAnimation(interaction, FORTNITE_POIS, revealedPoi);
+
+        // Final reveal: wrong guess result.
+        return await interaction.editReply({
           embeds: [
             new EmbedBuilder()
               .setColor(0xED4245)
+              .setTitle('❌ Wrong Guess!')
               .setThumbnail(revealedPoi.image)
               .setDescription(`**Sam** was hiding at **${revealedPoi.name}**`)
+              .setFooter({ text: revealedPoi.name })
               .setTimestamp()
-          ]
+          ],
         });
       }
     }
