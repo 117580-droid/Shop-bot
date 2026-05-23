@@ -340,14 +340,24 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       })
     );
 
+    // Build the flat display-name array here so it is available for both the
+    // early 'start' webhook call and the spin animation later.
+    const participantNames = uniqueUserIds.map(uid => nameMap.get(uid) ?? `<@${uid}>`);
+
     // ── Step 1: @everyone ping + initial countdown embed ─────────────────────
+    // Derive the base website URL by stripping the /api/spin suffix from the
+    // webhook URL so we can include a clickable link in the countdown embed.
+    const webhookUrl  = process.env.WHEEL_WEBSITE_WEBHOOK ?? '';
+    const websiteBase = webhookUrl.replace(/\/api\/spin\/?$/, '');
+
     const countdownEmbed = new EmbedBuilder()
       .setColor(0x5865F2)
       .setTitle('🎡 The Lottery Wheel is About to Spin!')
       .setDescription(
         `@everyone\n\n` +
         `The wheel will spin in **3 minutes**! 🕐\n\n` +
-        `Get ready — a winner is about to be chosen from the **50 WIN LOTTERY**!`
+        `Get ready — a winner is about to be chosen from the **50 WIN LOTTERY**!` +
+        (websiteBase ? `\n\n🌐 Watch live: [Lottery Wheel](${websiteBase})` : '')
       )
       .addFields(
         { name: '🎟️ Total Tickets',   value: `${totalTickets}`,  inline: true },
@@ -371,6 +381,18 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         embeds: [countdownEmbed],
       });
     }
+
+    // ── Webhook: countdown start ──────────────────────────────────────────────
+    // Notify the website immediately so it can display a synchronised 3-minute
+    // countdown timer and automatically trigger the spin animation when it
+    // reaches zero.  Fire-and-forget — failure must not block the Discord flow.
+    await sendWebhook({
+      action:         'start',
+      participants:   participantNames,
+      totalTickets,
+      uniqueEntrants: uniqueEntries,
+      timerSeconds:   180,
+    });
 
     // When invoked from DMs with a target guild, find the first sendable text
     // channel in that guild; otherwise fall back to the interaction's channel.
@@ -444,10 +466,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       1000, 1000,                // frames 13-14 (very slow / dramatic)
     ];
 
-    // Build a flat array of display names (one entry per unique participant)
-    // so the wheel cycles through real entrant names while spinning.
-    const participantNames = uniqueUserIds.map(uid => nameMap.get(uid) ?? `<@${uid}>`);
-
     // Pick a random name that differs from the previously shown one.
     function pickRandomName(excludeName) {
       const pool = participantNames.filter(n => n !== excludeName);
@@ -467,16 +485,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     } catch (err) {
       logError('handleLottery: spin message send', err);
     }
-
-    // ── Webhook: spin start ───────────────────────────────────────────────────
-    // Notify the website that the wheel has begun spinning so it can start its
-    // own animation.  Fire-and-forget — failure must not block the Discord flow.
-    await sendWebhook({
-      action:        'start',
-      participants:  participantNames,
-      totalTickets,
-      uniqueEntrants: uniqueEntries,
-    });
 
     if (spinMsg) {
       let lastShownName = null;
