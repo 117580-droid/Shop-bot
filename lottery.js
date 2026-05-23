@@ -1,5 +1,31 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+// ─── Webhook helper ───────────────────────────────────────────────────────────
+
+/**
+ * Send a JSON payload to the wheel website webhook.
+ *
+ * The webhook URL is read from the WHEEL_WEBSITE_WEBHOOK environment variable.
+ * If the variable is not set, or if the request fails for any reason, the error
+ * is logged and execution continues — the webhook is entirely optional.
+ *
+ * @param {object} payload - Data to POST as JSON.
+ */
+async function sendWebhook(payload) {
+  const webhookUrl = process.env.WHEEL_WEBSITE_WEBHOOK;
+  if (!webhookUrl) return; // Webhook not configured — skip silently.
+
+  try {
+    await fetch(webhookUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+  } catch (err) {
+    logError('sendWebhook', err);
+  }
+}
+
 // ─── Wheel graphic constants ──────────────────────────────────────────────────
 
 // Number of named slots around the wheel.  Must stay at 8 so the ASCII art
@@ -442,6 +468,15 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       logError('handleLottery: spin message send', err);
     }
 
+    // ── Webhook: spin start ───────────────────────────────────────────────────
+    // Notify the website that the wheel has begun spinning so it can start its
+    // own animation.  Fire-and-forget — failure must not block the Discord flow.
+    await sendWebhook({
+      action:        'start',
+      participants:  participantNames,
+      totalTickets,
+      uniqueEntrants: uniqueEntries,
+    });
 
     if (spinMsg) {
       let lastShownName = null;
@@ -469,6 +504,14 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
           logError('handleLottery: spin frame edit', err);
           // Non-fatal — continue the animation even if one frame fails.
         }
+
+        // ── Webhook: frame update ───────────────────────────────────────────
+        // Send the current rotation state so the website can mirror each frame.
+        await sendWebhook({
+          action:      'frame',
+          currentName: frameName,
+          rotation,
+        });
 
       }
     }
@@ -520,6 +563,15 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       logError('handleLottery: wheel result edit', err);
       try { await channel.send({ embeds: [landedEmbed] }); } catch { /* non-fatal */ }
     }
+
+    // ── Webhook: spin end ─────────────────────────────────────────────────────
+    // Tell the website the wheel has landed and who won so it can display the
+    // final result.  Fire-and-forget — failure must not affect the Discord flow.
+    await sendWebhook({
+      action:   'end',
+      winner:   winnerDisplayName,
+      rotation,
+    });
 
     // ── Step 6: Final winner announcement ────────────────────────────────────
     const resultEmbed = new EmbedBuilder()
