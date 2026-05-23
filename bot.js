@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints } = require('./game.js');
 const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
-const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery } = require('./lottery.js');
+const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 
@@ -68,6 +68,65 @@ async function safeReply(interaction, payload) {
     }
   } catch (err) {
     logError('safeReply', err);
+  }
+}
+
+// ─── Lottery Wheel Webhook ────────────────────────────────────────────────────
+
+/**
+ * Notify the lottery wheel website of the current participant list.
+ *
+ * Reads WHEEL_WEBSITE_WEBHOOK from the environment, ensures the URL ends with
+ * /api/spin, then POSTs the current participant data as JSON.  All errors are
+ * caught and logged so a webhook failure never interrupts the purchase flow.
+ *
+ * @param {object[]} participants  All rows from lottery_participants.
+ * @param {Map<string,string>} nameMap  userId → display name (may be empty).
+ */
+async function sendWebhook(participants, nameMap = new Map()) {
+  try {
+    let webhookUrl = (process.env.WHEEL_WEBSITE_WEBHOOK ?? '').trim();
+    if (!webhookUrl) {
+      log('WARN', 'sendWebhook: WHEEL_WEBSITE_WEBHOOK is not set — skipping.');
+      return;
+    }
+
+    // Normalise: always target the /api/spin endpoint.
+    if (!webhookUrl.endsWith('/api/spin')) {
+      webhookUrl = webhookUrl.replace(/\/+$/, '') + '/api/spin';
+    }
+
+    const uniqueUserIds  = [...new Set(participants.map(p => p.user_id))];
+    const totalTickets   = participants.length;
+    const uniqueEntrants = uniqueUserIds.length;
+
+    // Build the participants array using resolved display names where available,
+    // falling back to the raw user ID so the payload is always complete.
+    const participantNames = uniqueUserIds.map(uid => nameMap.get(uid) ?? uid);
+
+    const payload = {
+      action:         'update',
+      participants:   participantNames,
+      totalTickets,
+      uniqueEntrants,
+    };
+
+    const maskedUrl = webhookUrl.slice(0, 40) + (webhookUrl.length > 40 ? '…' : '');
+    log('INFO', `sendWebhook: POST ${maskedUrl} — ${totalTickets} ticket(s), ${uniqueEntrants} entrant(s)`);
+
+    const response = await fetch(webhookUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      log('WARN', `sendWebhook: received HTTP ${response.status} from wheel website.`);
+    } else {
+      log('INFO', `sendWebhook: wheel website notified successfully (HTTP ${response.status}).`);
+    }
+  } catch (err) {
+    logError('sendWebhook', err);
   }
 }
 
@@ -1269,6 +1328,10 @@ client.on('interactionCreate', async (interaction) => {
         for (let i = 0; i < quantity; i++) {
           addToLottery(db, user.id);
         }
+
+        // Notify the lottery wheel website of the updated participant list.
+        const allParticipants = getLotteryParticipants(db);
+        sendWebhook(allParticipants).catch(err => logError('buy: sendWebhook', err));
       }
 
       const newBalance = getBalance(user.id);
