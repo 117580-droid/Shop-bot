@@ -96,22 +96,22 @@ async function sendWebhook(participants, discordClient) {
       webhookUrl = webhookUrl.replace(/\/+$/, '') + '/api/spin';
     }
 
-    const uniqueUserIds  = [...new Set(participants.map(p => p.user_id))];
     const totalTickets   = participants.length;
-    const uniqueEntrants = uniqueUserIds.length;
+    const uniqueEntrants = new Set(participants.map(p => p.user_id)).size;
 
-    // Resolve each user ID to a Discord username.  If the fetch fails (e.g. the
-    // user deleted their account or is otherwise unavailable) fall back to the
-    // raw user ID so the payload is always complete.
+    // Resolve every participant row to a Discord username, preserving duplicates
+    // so that users with multiple tickets appear once per ticket in the payload.
+    // If the fetch fails (e.g. the user deleted their account or is otherwise
+    // unavailable) fall back to the raw user ID so the payload is always complete.
     const participantNames = await Promise.all(
-      uniqueUserIds.map(async (uid) => {
-        if (!discordClient) return uid;
+      participants.map(async (p) => {
+        if (!discordClient) return p.user_id;
         try {
-          const user = await discordClient.users.fetch(uid);
+          const user = await discordClient.users.fetch(p.user_id);
           return user.username;
         } catch {
-          log('WARN', `sendWebhook: could not fetch user ${uid} — using ID as fallback.`);
-          return uid;
+          log('WARN', `sendWebhook: could not fetch user ${p.user_id} — using ID as fallback.`);
+          return p.user_id;
         }
       })
     );
