@@ -13,15 +13,36 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
  */
 async function sendWebhook(payload) {
   const webhookUrl = process.env.WHEEL_WEBSITE_WEBHOOK;
-  if (!webhookUrl) return; // Webhook not configured — skip silently.
+
+  if (!webhookUrl) {
+    console.log('[sendWebhook] WHEEL_WEBSITE_WEBHOOK is not set — skipping webhook.');
+    return;
+  }
+
+  // Mask the URL in logs: show only the first 40 characters so the domain is
+  // visible for debugging without leaking the full secret path.
+  const maskedUrl = webhookUrl.length > 40
+    ? webhookUrl.slice(0, 40) + '…'
+    : webhookUrl;
+
+  console.log(`[sendWebhook] Calling webhook. URL: ${maskedUrl}`);
+  console.log(`[sendWebhook] Payload: ${JSON.stringify(payload)}`);
 
   try {
-    await fetch(webhookUrl, {
+    const res = await fetch(webhookUrl, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(payload),
     });
+    console.log(`[sendWebhook] Response status: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      console.log(`[sendWebhook] WARNING — non-OK response (${res.status}). Webhook may not have been accepted.`);
+    } else {
+      console.log('[sendWebhook] Webhook delivered successfully.');
+    }
   } catch (err) {
+    console.error(`[sendWebhook] Fetch failed: ${err?.message ?? err}`);
+    console.error(err?.stack ?? err);
     logError('sendWebhook', err);
   }
 }
