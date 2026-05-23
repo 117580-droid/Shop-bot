@@ -327,15 +327,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       });
     }
 
-    // ── Clear current round from DB ───────────────────────────────────────────
-    // Remove this round's participants from the database immediately so any
-    // tickets bought while the spin is in progress count toward the NEXT round.
-    // The `participants` snapshot captured above is used for the entire spin.
-    // The website reset is also sent now so the wheel clears the previous
-    // round's display before the new spin animation begins — names from the
-    // last spin stay visible until this point.
-    clearLottery(db);
-    await sendWebhook({ action: 'reset' });
+
 
     const totalTickets  = participants.length;
     const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
@@ -643,6 +635,15 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       logError('handleLottery: DM winner', err);
       // Non-fatal — the coins were still awarded and the result was posted publicly
     }
+
+    // ── Clear current round from DB ───────────────────────────────────────────
+    // Participants are kept in the database throughout the entire spin so that
+    // the website can display all names while the wheel is running.  Only now
+    // that the spin is fully complete (winner announced, DM sent) do we clear
+    // the table.  Any tickets purchased during the spin are part of this round;
+    // the next round starts with a clean slate from this point forward.
+    clearLottery(db);
+    await sendWebhook({ action: 'reset' });
 
   } catch (err) {
     logError('handleLottery', err);
