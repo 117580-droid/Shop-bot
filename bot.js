@@ -153,6 +153,30 @@ async function processModerationSchedule(clientRef) {
 }
 
 // ─── Database Setup ───────────────────────────────────────────────────────────
+//
+// PERSISTENCE GUARANTEE
+// ─────────────────────
+// The SQLite database is stored at /data/shop.db, which is mapped to a Railway
+// persistent volume. This means ALL data survives bot restarts, redeployments,
+// and updates without any loss.
+//
+// What is persisted:
+//   • shop_items     — every item added via /additem
+//   • user_balances  — every user's coin balance awarded via /givecoin or games
+//   • purchases      — full purchase history
+//   • inventories    — per-user item inventories
+//   • warnings       — moderation warning records
+//
+// Data removal policy:
+//   Data is ONLY removed through explicit owner commands:
+//     /removeitem <name>       — permanently deletes a shop item (owner only)
+//     /removecoin <user> <amt> — deducts coins from a user's balance (owner only)
+//   No other code path deletes or resets coins or shop items. Bot restarts,
+//   crashes, updates, and redeployments are all completely safe.
+//
+// Volume path: /data  (mount this directory to a Railway persistent volume)
+// Database file: /data/shop.db
+//
 const DB_PATH = '/data/shop.db';
 const DB_DIR  = path.dirname(DB_PATH);
 
@@ -1029,6 +1053,12 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ── /removeitem ───────────────────────────────────────────────────────────
+    // This is ONE OF ONLY TWO ways data is ever deleted from the database.
+    // Permanently removes a shop item (and its name from the catalogue) from the
+    // persistent SQLite store at /data/shop.db. The deletion survives restarts
+    // because the file lives on the mounted volume — this command is the ONLY
+    // mechanism that can remove a shop item. Bot restarts or updates will NOT
+    // remove items; only an explicit call to /removeitem by the owner will.
     if (commandName === 'removeitem') {
       // Owner-only guard
       if (!OWNER_ID || user.id !== OWNER_ID) {
@@ -1071,6 +1101,12 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ── /removecoin ───────────────────────────────────────────────────────────
+    // This is ONE OF ONLY TWO ways data is ever deleted from the database.
+    // Deducts coins from a user's persistent balance stored in /data/shop.db.
+    // Coin balances are written to the mounted volume and survive all restarts,
+    // crashes, and redeployments. The ONLY way to reduce a user's balance is an
+    // explicit call to /removecoin by the owner — nothing else removes coins.
+    // The deduction is clamped so the balance never goes below zero.
     if (commandName === 'removecoin') {
       // Owner-only guard
       if (!OWNER_ID || user.id !== OWNER_ID) {
