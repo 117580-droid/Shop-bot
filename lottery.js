@@ -232,11 +232,20 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       .setTimestamp();
 
     // Defer the reply so we have time for the full countdown sequence.
-    await interaction.deferReply();
-    await interaction.editReply({
-      content: '@everyone',
-      embeds: [countdownEmbed],
-    });
+    // If the interaction was already replied to (e.g. triggered from /buy),
+    // skip deferReply and send the countdown as a followUp instead.
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.deferReply();
+      await interaction.editReply({
+        content: '@everyone',
+        embeds: [countdownEmbed],
+      });
+    } else {
+      await interaction.followUp({
+        content: '@everyone',
+        embeds: [countdownEmbed],
+      });
+    }
 
     // When invoked from DMs with a target guild, find the first sendable text
     // channel in that guild; otherwise fall back to the interaction's channel.
