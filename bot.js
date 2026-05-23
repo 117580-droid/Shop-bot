@@ -71,6 +71,50 @@ async function safeReply(interaction, payload) {
   }
 }
 
+// ─── Webhook sender for lottery updates ────────────────────────────────────────
+/**
+ * Send a webhook update to the lottery wheel website.
+ * @param {object} payload - The webhook payload (action, participants, etc.)
+ */
+async function sendWebhook(payload) {
+  const webhookUrl = process.env.WHEEL_WEBSITE_WEBHOOK;
+  
+  if (!webhookUrl) {
+    log('WARN', '[sendWebhook] WHEEL_WEBSITE_WEBHOOK env var not set, skipping webhook');
+    return;
+  }
+
+  // Ensure the URL always targets the /api/spin endpoint.
+  const endpoint = '/api/spin';
+  const fullUrl = webhookUrl.endsWith(endpoint)
+    ? webhookUrl
+    : webhookUrl.replace(/\/+$/, '') + endpoint;
+
+  // Mask the URL in logs: show only the first 40 characters
+  const maskedUrl = fullUrl.length > 40
+    ? fullUrl.slice(0, 40) + '…'
+    : fullUrl;
+
+  log('INFO', `[sendWebhook] Calling webhook. URL: ${maskedUrl}`);
+  log('INFO', `[sendWebhook] Payload: ${JSON.stringify(payload)}`);
+
+  try {
+    const res = await fetch(fullUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+
+    log('INFO', `[sendWebhook] Response status: ${res.status} ${res.statusText}`);
+
+    if (!res.ok) {
+      log('WARN', `[sendWebhook] WARNING — non-OK response (${res.status}). Webhook may not have been accepted.`);
+    }
+  } catch (err) {
+    logError('[sendWebhook]', err);
+  }
+}
+
 // ─── Moderation Helpers ───────────────────────────────────────────────────────
 
 /**
@@ -1233,8 +1277,30 @@ client.on('interactionCreate', async (interaction) => {
         for (let i = 0; i < quantity; i++) {
           addToLottery(db, user.id);
         }
-      }
 
+      // Send webhook update to lottery wheel website
+      if (itemName.toUpperCase() === '50 WIN LOTTERY') {
+        const participants = db.prepare('SELECT DISTINCT user_id FROM lottery_participants').all().map(p => p.user_id);
+        const participantNames = [];
+        for (const userId of participants) {
+          try {
+            const u = await client.users.fetch(userId);
+            participantNames.push(u.username);
+          } catch {
+            participantNames.push(`<@${userId}>`);
+          }
+        }
+        const totalTickets = db.prepare('SELECT COUNT(*) as count FROM lottery_participants').get().count;
+        const uniqueEntrants = participants.length;
+        
+        await sendWebhook({
+          action: 'update',
+          participants: participantNames,
+          totalTickets: totalTickets,
+          uniqueEntrants: uniqueEntrants,
+        });
+      }
+      }
       const newBalance = getBalance(user.id);
 
       const embed = new EmbedBuilder()
