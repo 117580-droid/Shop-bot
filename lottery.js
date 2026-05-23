@@ -3,17 +3,23 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 // ─── Webhook helper ───────────────────────────────────────────────────────────
 
 /**
- * Send a JSON payload to the wheel website webhook.
+ * POST a JSON payload to the wheel website's /api/spin endpoint.
  *
- * The webhook URL is read from the WHEEL_WEBSITE_WEBHOOK environment variable.
- * If the variable is not set, or if the request fails for any reason, the error
- * is logged and execution continues — the webhook is entirely optional.
+ * The base URL is derived from WHEEL_WEBSITE_WEBHOOK (strips any trailing
+ * /api/spin path so we can append it cleanly).  If the variable is not set,
+ * or if the request fails for any reason, the error is logged and execution
+ * continues — the webhook is entirely optional.
  *
  * @param {object} payload - Data to POST as JSON.
  */
 async function sendWebhook(payload) {
-  const webhookUrl = process.env.WHEEL_WEBSITE_WEBHOOK;
+  let webhookUrl = (process.env.WHEEL_WEBSITE_WEBHOOK ?? '').trim();
   if (!webhookUrl) return; // Webhook not configured — skip silently.
+
+  // Normalise: always target the /api/spin endpoint.
+  if (!webhookUrl.endsWith('/api/spin')) {
+    webhookUrl = webhookUrl.replace(/\/+$/, '') + '/api/spin';
+  }
 
   try {
     await fetch(webhookUrl, {
@@ -24,177 +30,6 @@ async function sendWebhook(payload) {
   } catch (err) {
     logError('sendWebhook', err);
   }
-}
-
-// ─── Wheel graphic constants ──────────────────────────────────────────────────
-
-// Number of named slots around the wheel.  Must stay at 8 so the ASCII art
-// positions (top, top-right, right, bottom-right, bottom, bottom-left, left,
-// top-left) map 1-to-1 onto the SLOT_* layout constants below.
-const WHEEL_SLOTS = 8;
-
-// Decorative centre icons that cycle while the wheel is spinning.
-const CENTER_ICONS = ['🎰', '🌀', '💫', '⭐', '🌟', '✨', '🎲', '🎯'];
-
-// Divider lines used inside the wheel ring to suggest segment boundaries.
-// Each entry is one of four diagonal/straight spoke characters.
-const SPOKES = ['╱', '│', '╲', '─', '╱', '│', '╲', '─'];
-
-/**
- * Truncate a display name so it fits inside a wheel slot without breaking the
- * layout.  Slots have a maximum of 10 visible characters.
- */
-function truncateName(name, max = 10) {
-  if (name.length <= max) return name;
-  return name.slice(0, max - 1) + '…';
-}
-
-/**
- * Pad a name to exactly `width` characters (centred) using spaces.
- * Used to keep the wheel ring columns aligned.
- */
-function padCenter(str, width) {
-  const pad = Math.max(0, width - str.length);
-  const left  = Math.floor(pad / 2);
-  const right = pad - left;
-  return ' '.repeat(left) + str + ' '.repeat(right);
-}
-
-/**
- * Build a real ASCII roulette-wheel embed.
- *
- * The wheel has 8 named slots arranged around a circle.  The `rotationOffset`
- * parameter shifts which participant name appears in each slot, creating the
- * illusion of the wheel rotating.  A fixed ▼ pointer sits above the top slot
- * so viewers can see which name is "under the needle".
- *
- * Layout (code-block, monospace):
- *
- *              ▼  ← pointer (fixed)
- *        ┌─────────────┐
- *   [TL] │  [T]  │  [TR] │
- *        │───────┼───────│
- *   [L]  │  [C]  │  [R]  │
- *        │───────┼───────│
- *   [BL] │  [B]  │  [BR] │
- *        └─────────────┘
- *
- * @param {string[]} participantNames  All unique participant display names.
- * @param {string}   selectedName      Name currently under the pointer (top slot).
- * @param {boolean}  isSpinning        true → spinning; false → landed.
- * @param {number}   rotationOffset    How many slots the wheel has rotated.
- * @returns {EmbedBuilder}
- */
-function generateLotteryWheelEmbed(participantNames, selectedName, isSpinning, rotationOffset = 0) {
-  const total = participantNames.length;
-
-  // ── Build the 8-slot ring ─────────────────────────────────────────────────
-  // Slot indices (clockwise from top):
-  //   0 = top, 1 = top-right, 2 = right, 3 = bottom-right,
-  //   4 = bottom, 5 = bottom-left, 6 = left, 7 = top-left
-  //
-  // We rotate the participant list by `rotationOffset` so slot 0 always shows
-  // the "current" name under the pointer.
-  const slots = Array.from({ length: WHEEL_SLOTS }, (_, i) => {
-    if (total === 0) return '———';
-    const nameIdx = (rotationOffset + i) % total;
-    return truncateName(participantNames[nameIdx], 10);
-  });
-
-  // Slot aliases for readability
-  const [sTop, sTR, sRight, sBR, sBot, sBL, sLeft, sTL] = slots;
-
-  // ── Centre icon ───────────────────────────────────────────────────────────
-  const centerIcon = isSpinning
-    ? CENTER_ICONS[rotationOffset % CENTER_ICONS.length]
-    : '🏆';
-
-  // ── Spoke character (rotates to suggest motion) ───────────────────────────
-  const spoke = SPOKES[rotationOffset % SPOKES.length];
-
-  // ── Highlight the top slot (under the pointer) ────────────────────────────
-  const topLabel    = isSpinning ? `◀ ${padCenter(sTop, 10)} ▶` : `★ ${padCenter(sTop, 10)} ★`;
-  const tlLabel     = padCenter(sTL,    10);
-  const trLabel     = padCenter(sTR,    10);
-  const leftLabel   = padCenter(sLeft,  10);
-  const rightLabel  = padCenter(sRight, 10);
-  const blLabel     = padCenter(sBL,    10);
-  const brLabel     = padCenter(sBR,    10);
-  const botLabel    = padCenter(sBot,   10);
-
-  // ── Assemble the wheel as a monospace code block ──────────────────────────
-  //
-  // The wheel is drawn as a 7-row ASCII diagram inside a Discord code block.
-  // Each row is exactly the same width so the circle looks round.
-  //
-  //   Row 0:          ▼  (pointer, centred above top slot)
-  //   Row 1:    ╭──────────────────────────╮
-  //   Row 2:    │  [TL]   [TOP]   [TR]     │
-  //   Row 3:    │  [L]   [icon]   [R]      │
-  //   Row 4:    │  [BL]   [BOT]   [BR]     │
-  //   Row 5:    ╰──────────────────────────╯
-  //
-  // We use a fixed-width inner area of 34 chars so names up to 10 chars each
-  // fit comfortably with separators.
-
-  const W = 36; // inner width of the wheel (between the │ borders)
-
-  function row(...cols) {
-    // Join columns with a spoke separator and pad the whole row to W chars.
-    const inner = cols.join(` ${spoke} `);
-    const padded = inner.padEnd(W);
-    return `│${padded}│`;
-  }
-
-  const topBorder = `╭${'─'.repeat(W)}╮`;
-  const midDiv    = `├${'─'.repeat(W)}┤`;
-  const botBorder = `╰${'─'.repeat(W)}╯`;
-
-  // Pointer line — centred over the top-slot column (roughly col 2 of 3).
-  // The top slot is in the middle column, so we offset the pointer accordingly.
-  const pointerOffset = Math.floor(W / 2);
-  const pointerLine   = ' '.repeat(pointerOffset) + '▼';
-
-  const wheelLines = [
-    pointerLine,
-    topBorder,
-    row(tlLabel, topLabel, trLabel),
-    midDiv,
-    row(leftLabel, ` ${centerIcon} `.padEnd(12), rightLabel),
-    midDiv,
-    row(blLabel, botLabel, brLabel),
-    botBorder,
-  ];
-
-  // ── Status line ───────────────────────────────────────────────────────────
-  const statusLine = isSpinning
-    ? `🌀  **Spinning…**`
-    : `🎯  **LANDED ON:  ${selectedName}**`;
-
-  // ── Current selection callout ─────────────────────────────────────────────
-  const selectionLine = isSpinning
-    ? `**Under the pointer →** ${selectedName}`
-    : `🏆  **${selectedName}**  🏆`;
-
-  // ── Full description ──────────────────────────────────────────────────────
-  const description = [
-    '```',
-    ...wheelLines,
-    '```',
-    '',
-    selectionLine,
-    statusLine,
-  ].join('\n');
-
-  // Embed colour: blurple while spinning, gold when landed.
-  const color = isSpinning ? 0x5865F2 : 0xFEE75C;
-
-  return new EmbedBuilder()
-    .setColor(color)
-    .setTitle(isSpinning ? '🎡 Spinning the Lottery Wheel…' : '🎯 The Wheel Has Landed!')
-    .setDescription(description)
-    .setFooter({ text: isSpinning ? 'Spinning…' : `Winner: ${selectedName}` })
-    .setTimestamp();
 }
 
 // ─── Consistent error logger ──────────────────────────────────────────────────
@@ -218,6 +53,7 @@ async function safeReply(interaction, payload) {
 // ─── Database initialisation ──────────────────────────────────────────────────
 // Called once from bot.js after the shared `db` instance is created.
 function initLotteryTable(db) {
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS lottery_participants (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -316,7 +152,20 @@ async function broadcastToChannels(channels, payload) {
 }
 
 // ─── Command handler ──────────────────────────────────────────────────────────
-async function handleLottery(interaction, db, client, updateBalance, targetGuild) {
+//
+// Flow:
+//   1. Countdown (3 min) with periodic Discord messages.
+//   2. Send ONE Discord message: "🌀 Spinning the wheel on the website…"
+//   3. POST a 'spin' webhook to the website with all participants + a callback URL.
+//   4. Website animates the wheel smoothly (HTML5 canvas, no Discord rate limits).
+//   5. Website POSTs the winner back to the bot's /api/result endpoint.
+//   6. Bot edits the Discord message to show the winner and announces the result.
+//
+// The `waitForResult` parameter is an async function injected by bot.js that
+// returns a Promise which resolves to { winner: string } when the website
+// calls back, or rejects after a timeout.
+//
+async function handleLottery(interaction, db, client, updateBalance, targetGuild, waitForResult) {
   try {
     const participants = getLotteryParticipants(db);
 
@@ -326,8 +175,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         ephemeral: true,
       });
     }
-
-
 
     const totalTickets  = participants.length;
     const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
@@ -342,15 +189,14 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       })
     );
 
-    // Build the flat display-name array here so it is available for both the
-    // early 'start' webhook call and the spin animation later.
+    // Flat display-name array (one entry per ticket, preserving duplicates so
+    // the wheel gives each ticket equal weight on the website too).
     const participantNames = participants.map(p => nameMap.get(p.user_id) ?? `<@${p.user_id}>`);
 
     // ── Step 1: @everyone ping + initial countdown embed ─────────────────────
-    // Derive the base website URL by stripping the /api/spin suffix from the
-    // webhook URL so we can include a clickable link in the countdown embed.
-    const webhookUrl  = process.env.WHEEL_WEBSITE_WEBHOOK ?? '';
-    const websiteBase = webhookUrl.replace(/\/api\/spin\/?$/, '');
+    // Derive the base website URL from the webhook env var.
+    const webhookEnv  = (process.env.WHEEL_WEBSITE_WEBHOOK ?? '').trim();
+    const websiteBase = webhookEnv.replace(/\/api\/spin\/?$/, '').replace(/\/+$/, '');
 
     const countdownEmbed = new EmbedBuilder()
       .setColor(0x5865F2)
@@ -369,8 +215,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       .setTimestamp();
 
     // Defer the reply so we have time for the full countdown sequence.
-    // If the interaction was already replied to (e.g. triggered from /buy),
-    // skip deferReply and send the countdown as a followUp instead.
     if (!interaction.replied && !interaction.deferred) {
       await interaction.deferReply();
       await interaction.editReply({
@@ -385,9 +229,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     }
 
     // ── Webhook: countdown start ──────────────────────────────────────────────
-    // Notify the website immediately so it can display a synchronised 3-minute
-    // countdown timer and automatically trigger the spin animation when it
-    // reaches zero.  Fire-and-forget — failure must not block the Discord flow.
+    // Tell the website a spin is coming so it can show the countdown timer.
     await sendWebhook({
       action:         'start',
       participants:   participantNames,
@@ -396,8 +238,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       timerSeconds:   180,
     });
 
-    // When invoked from DMs with a target guild, find the first sendable text
-    // channel in that guild; otherwise fall back to the interaction's channel.
+    // Resolve the channel we'll post into.
     let channel = interaction.channel;
     if (targetGuild) {
       const guildChannel = targetGuild.channels.cache
@@ -418,14 +259,12 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       channel = guildChannel;
     }
 
-    // Resolve the guild we're operating in (for multi-channel broadcast later).
     const guild = targetGuild ?? interaction.guild ?? null;
 
     // ── Step 2: Countdown messages ────────────────────────────────────────────
-    // Schedule: 3 min → 2 min → 1 min → 30 s → 10 s → 5 s → 4 s → 3 s → 2 s → 1 s
     const countdownSteps = [
-      { waitMs: 60_000, label: '2 minutes' },
-      { waitMs: 60_000, label: '1 minute'  },
+      { waitMs: 60_000, label: '2 minutes'  },
+      { waitMs: 60_000, label: '1 minute'   },
       { waitMs: 30_000, label: '30 seconds' },
       { waitMs: 20_000, label: '10 seconds' },
       { waitMs:  5_000, label: '5 seconds'  },
@@ -437,7 +276,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
 
     for (const step of countdownSteps) {
       await sleep(step.waitMs);
-
       try {
         await channel.send({
           embeds: [
@@ -451,102 +289,92 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       }
     }
 
-    // Final 1-second pause before the spin animation begins.
     await sleep(1_000);
 
-    // ── Step 3: Visual spinning wheel animation ───────────────────────────────
-    // Snappy deceleration schedule — 100 frames across ~3-4 s total.
-    // Each entry is [delayMs, rotationIncrement] so the wheel blazes through
-    // the fast phase and then decelerates aggressively into the final slot.
-    //   Frames  1-30 →  20 ms, +1.5 rotation  (super fast spin)
-    //   Frames 31-60 →  40 ms, +1.0 rotation  (still fast, starting to slow)
-    //   Frames 61-80 →  80 ms, +0.5 rotation  (slowing down)
-    //   Frames 81-100 → 150 ms, +0.2 rotation  (dramatic finish)
-    const spinFrames = [
-      // [delayMs, rotationIncrement]
-      ...Array(30).fill([  20, 1.5]),   // frames  1-30 (super fast)
-      ...Array(30).fill([  40, 1.0]),   // frames 31-60 (fast, easing)
-      ...Array(20).fill([  80, 0.5]),   // frames 61-80 (slowing)
-      ...Array(20).fill([ 150, 0.2]),   // frames 81-100 (dramatic finish)
-    ];
-
-    // Pick a random name that differs from the previously shown one.
-    function pickRandomName(excludeName) {
-      const pool = participantNames.filter(n => n !== excludeName);
-      // Fall back to the full list if there is only one participant.
-      const source = pool.length ? pool : participantNames;
-      return source[Math.floor(Math.random() * source.length)];
-    }
-
+    // ── Step 3: Send the "spinning on website" Discord message ────────────────
+    // This is the ONE message that will later be edited to show the winner.
     let spinMsg;
-    let rotation = 0;
-
-    // Send the initial wheel message (frame 0 — already spinning).
     try {
       spinMsg = await channel.send({
-        embeds: [generateLotteryWheelEmbed(participantNames, pickRandomName(null), true, rotation)],
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🌀 Spinning the Wheel…')
+            .setDescription(
+              `The wheel is spinning on the website right now!\n\n` +
+              (websiteBase ? `🌐 **[Watch the live spin here](${websiteBase})**\n\n` : '') +
+              `The winner will be announced here in a few seconds…`
+            )
+            .setFooter({ text: 'Smooth animation powered by the website — no Discord lag!' })
+            .setTimestamp(),
+        ],
       });
     } catch (err) {
       logError('handleLottery: spin message send', err);
     }
 
-    if (spinMsg) {
-      let lastShownName = null;
+    // ── Step 4: POST 'spin' webhook to website ────────────────────────────────
+    // Include a callbackUrl so the website knows where to POST the result back.
+    // The bot's HTTP server listens on BOT_CALLBACK_PORT (default 3000).
+    const callbackPort = process.env.BOT_CALLBACK_PORT ?? '3000';
+    const callbackHost = process.env.BOT_CALLBACK_HOST ?? `http://localhost:${callbackPort}`;
+    const callbackUrl  = `${callbackHost}/api/result`;
 
-      for (let i = 0; i < spinFrames.length; i++) {
-        const [frameDelay, frameIncrement] = spinFrames[i];
-        await sleep(frameDelay);
+    await sendWebhook({
+      action:       'spin',
+      participants: participantNames,
+      totalTickets,
+      callbackUrl,
+    });
 
-        const isLastFrame = i === spinFrames.length - 1;
-
-        // On the very last intermediate frame we still show a random name —
-        // the actual winner is revealed in Step 5 via a separate edit.
-        const frameName = pickRandomName(lastShownName);
-        lastShownName   = frameName;
-
-        // Advance the ring rotation by the frame's increment (fractional values
-        // are floored so the slot index stays a whole number, but the accumulated
-        // fractional part carries over to keep the deceleration smooth).
-        rotation = (rotation + frameIncrement) % Math.max(participantNames.length, 1);
-
-        try {
-          await spinMsg.edit({
-            embeds: [generateLotteryWheelEmbed(participantNames, frameName, !isLastFrame, rotation)],
-          });
-        } catch (err) {
-          logError('handleLottery: spin frame edit', err);
-          // Non-fatal — continue the animation even if one frame fails.
+    // ── Step 5: Wait for the website to POST the winner back ──────────────────
+    // waitForResult() is injected by bot.js.  It resolves to { winner } when
+    // the website calls /api/result, or resolves to null after a 30-second
+    // timeout (so the bot can fall back to picking a winner itself).
+    let websiteWinner = null;
+    if (typeof waitForResult === 'function') {
+      try {
+        const result = await waitForResult(30_000);
+        if (result?.winner) {
+          websiteWinner = result.winner;
         }
-
-        // ── Webhook: frame update ───────────────────────────────────────────
-        // Send the current rotation state so the website can mirror each frame.
-        await sendWebhook({
-          action:      'frame',
-          currentName: frameName,
-          rotation,
-        });
-
+      } catch (err) {
+        logError('handleLottery: waitForResult', err);
       }
     }
 
-    // ── Step 4: Pick the winner ───────────────────────────────────────────────
-    const winnerEntry = participants[Math.floor(Math.random() * participants.length)];
-    const winnerId    = winnerEntry.user_id;
+    // ── Step 6: Determine the winner ─────────────────────────────────────────
+    // Prefer the name returned by the website (it ran the animation and picked
+    // the slot the wheel landed on).  Fall back to a random pick if the website
+    // didn't respond in time or isn't configured.
+    let winnerId;
+    let winnerDisplayName;
+
+    if (websiteWinner) {
+      // The website returns a display name.  Find the matching participant entry.
+      const matchEntry = participants.find(p =>
+        (nameMap.get(p.user_id) ?? `<@${p.user_id}>`).toLowerCase() === websiteWinner.toLowerCase()
+      );
+      if (matchEntry) {
+        winnerId           = matchEntry.user_id;
+        winnerDisplayName  = nameMap.get(winnerId) ?? `<@${winnerId}>`;
+      }
+    }
+
+    // Fallback: pick randomly from the DB entries.
+    if (!winnerId) {
+      const winnerEntry  = participants[Math.floor(Math.random() * participants.length)];
+      winnerId           = winnerEntry.user_id;
+      winnerDisplayName  = nameMap.get(winnerId) ?? `<@${winnerId}>`;
+    }
 
     // Award 50 coins to the winner.
     updateBalance(winnerId, 50);
 
-    const winnerDisplayName = nameMap.get(winnerId) ?? `<@${winnerId}>`;
     const winnerTag = `${winnerDisplayName} (<@${winnerId}>)`;
 
-    // ── Step 5: Wheel lands — show the visual "landed" state ─────────────────
-    // Edit the spinning wheel message to its final "landed" state, showing the
-    // winner's name under the 🎯 pointer with the gold colour.
-    const landedEmbed = generateLotteryWheelEmbed(participantNames, winnerDisplayName, false, rotation);
-
-
-    // Append the full participant list as a field so viewers can see all entrants.
-    const wheelLines = uniqueUserIds.map(uid => {
+    // ── Step 7: Edit the "spinning" message to show the winner ────────────────
+    const entrantLines = uniqueUserIds.map(uid => {
       const name     = nameMap.get(uid) ?? `<@${uid}>`;
       const tickets  = participants.filter(p => p.user_id === uid).length;
       const isWinner = uid === winnerId;
@@ -555,13 +383,17 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         : `▫️ ${name} (${tickets} ticket${tickets !== 1 ? 's' : ''})`;
     });
 
-    landedEmbed
+    const landedEmbed = new EmbedBuilder()
+      .setColor(0xFEE75C)
+      .setTitle('🎯 The Wheel Has Landed!')
+      .setDescription(`🏆  **${winnerDisplayName}**  🏆\n\n🎯  **LANDED ON: ${winnerDisplayName}**`)
       .addFields(
         { name: '🎟️ Total Tickets',   value: `${totalTickets}`,  inline: true },
         { name: '👥 Unique Entrants', value: `${uniqueEntries}`, inline: true },
-        { name: '🏅 Entrants',        value: wheelLines.join('\n') || '—', inline: false },
+        { name: '🏅 Entrants',        value: entrantLines.join('\n') || '—', inline: false },
       )
-      .setFooter({ text: 'Buy a ticket to enter the next round!' });
+      .setFooter({ text: 'Buy a ticket to enter the next round!' })
+      .setTimestamp();
 
     try {
       if (spinMsg) {
@@ -575,15 +407,12 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     }
 
     // ── Webhook: spin end ─────────────────────────────────────────────────────
-    // Tell the website the wheel has landed and who won so it can display the
-    // final result.  Fire-and-forget — failure must not affect the Discord flow.
     await sendWebhook({
-      action:   'end',
-      winner:   winnerDisplayName,
-      rotation,
+      action: 'end',
+      winner: winnerDisplayName,
     });
 
-    // ── Step 6: Final winner announcement ────────────────────────────────────
+    // ── Step 8: Final winner announcement ────────────────────────────────────
     const resultEmbed = new EmbedBuilder()
       .setColor(0x57F287)
       .setTitle('🎉 We Have a Winner!')
@@ -596,19 +425,17 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       )
       .setTimestamp();
 
-    // Send the winner announcement to the main channel first.
     try {
       await channel.send({ content: `🎉 <@${winnerId}>`, embeds: [resultEmbed] });
     } catch (err) {
       logError('handleLottery: final announcement (main channel)', err);
     }
 
-    // ── Step 7: Broadcast result to #announcements and #general ──────────────
+    // ── Step 9: Broadcast result to #announcements and #general ──────────────
     if (guild) {
       const announcementsChannel = findChannelByName(guild, 'announcements');
       const generalChannel       = findChannelByName(guild, 'general');
 
-      // Collect channels that are different from the main channel (avoid duplicates).
       const broadcastTargets = [announcementsChannel, generalChannel].filter(
         ch => ch && ch.id !== channel.id
       );
@@ -621,7 +448,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       }
     }
 
-    // ── Step 8: DM the winner ─────────────────────────────────────────────────
+    // ── Step 10: DM the winner ────────────────────────────────────────────────
     try {
       const winnerUser = await client.users.fetch(winnerId);
       const dmEmbed = new EmbedBuilder()
@@ -636,15 +463,10 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       await winnerUser.send({ embeds: [dmEmbed] });
     } catch (err) {
       logError('handleLottery: DM winner', err);
-      // Non-fatal — the coins were still awarded and the result was posted publicly
+      // Non-fatal — coins were still awarded and result posted publicly.
     }
 
     // ── Clear current round from DB ───────────────────────────────────────────
-    // Participants are kept in the database throughout the entire spin so that
-    // the website can display all names while the wheel is running.  Only now
-    // that the spin is fully complete (winner announced, DM sent) do we clear
-    // the table.  Any tickets purchased during the spin are part of this round;
-    // the next round starts with a clean slate from this point forward.
     clearLottery(db);
     await sendWebhook({ action: 'reset' });
 
