@@ -1271,24 +1271,11 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      // ── Lottery auto-spin for "50 WIN LOTTERY" ───────────────────────────────
+      // ── Lottery confirmation for "50 WIN LOTTERY" ────────────────────────────
       if (itemName.toUpperCase() === '50 WIN LOTTERY') {
-        // Send the purchase confirmation first, then immediately trigger the wheel.
-        embed.setDescription('🎡 You bought a lottery ticket! The wheel will spin soon…');
-        await safeReply(interaction, { embeds: [embed] });
-
-        // Fire the wheel spin in the same channel/guild context as the purchase.
-        // Pass targetGuild only when the interaction came from DMs (so handleLottery
-        // can find a sendable channel in the target guild). When already in a guild,
-        // pass null so handleLottery uses interaction.channel directly — ensuring the
-        // wheel spins in the exact channel where /buy was typed.
-        // This runs asynchronously so the interaction reply is not blocked.
-        const lotteryTargetGuild = interaction.guild ? null : buyGuild;
-        handleLottery(interaction, db, client, updateBalance, lotteryTargetGuild).catch(err => {
-          logError('buy: auto-spin handleLottery', err);
-        });
-
-        return;
+        // Just confirm the purchase — the wheel is only spun when an admin runs /spinwheel.
+        embed.setDescription('🎡 You bought a lottery ticket! You\'re now in the wheel. An admin will spin it soon.');
+        return await safeReply(interaction, { embeds: [embed] });
       }
 
       return await safeReply(interaction, { embeds: [embed] });
