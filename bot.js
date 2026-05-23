@@ -266,6 +266,16 @@ try {
   process.exit(1);
 }
 
+// ─── Database Persistence Check ──────────────────────────────────────────────
+try {
+  const itemCount  = db.prepare('SELECT COUNT(*) AS cnt FROM shop_items').get().cnt;
+  const userCount  = db.prepare('SELECT COUNT(*) AS cnt FROM user_balances WHERE balance > 0').get().cnt;
+  const totalCoins = db.prepare('SELECT COALESCE(SUM(balance), 0) AS total FROM user_balances').get().total;
+  log('INFO', `Database persistence check: ${itemCount} shop items, ${userCount} users with coins, ${totalCoins} total coins`);
+} catch (err) {
+  log('WARN', `Database persistence check failed: ${err?.message ?? err}`);
+}
+
 // ─── Database Helpers ─────────────────────────────────────────────────────────
 function getBalance(userId) {
   try {
