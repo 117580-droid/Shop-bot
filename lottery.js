@@ -455,19 +455,19 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     await sleep(1_000);
 
     // ── Step 3: Visual spinning wheel animation ───────────────────────────────
-    // Smooth deceleration schedule — 40 frames across ~14 s total.
-    // Each entry is [delayMs, rotationIncrement] so the wheel decelerates
-    // gradually rather than jumping between a handful of discrete speeds.
-    //   Frames  1-10 →  80 ms, +0.8 rotation  (fast spin)
-    //   Frames 11-20 → 150 ms, +0.6 rotation  (slowing down)
-    //   Frames 21-30 → 300 ms, +0.4 rotation  (crawling)
-    //   Frames 31-40 → 600 ms, +0.2 rotation  (dramatic deceleration)
+    // Snappy deceleration schedule — 100 frames across ~3-4 s total.
+    // Each entry is [delayMs, rotationIncrement] so the wheel blazes through
+    // the fast phase and then decelerates aggressively into the final slot.
+    //   Frames  1-30 →  20 ms, +1.5 rotation  (super fast spin)
+    //   Frames 31-60 →  40 ms, +1.0 rotation  (still fast, starting to slow)
+    //   Frames 61-80 →  80 ms, +0.5 rotation  (slowing down)
+    //   Frames 81-100 → 150 ms, +0.2 rotation  (dramatic finish)
     const spinFrames = [
       // [delayMs, rotationIncrement]
-      ...Array(10).fill([  80, 0.8]),   // frames  1-10 (fast)
-      ...Array(10).fill([ 150, 0.6]),   // frames 11-20 (medium)
-      ...Array(10).fill([ 300, 0.4]),   // frames 21-30 (slow)
-      ...Array(10).fill([ 600, 0.2]),   // frames 31-40 (very slow / dramatic)
+      ...Array(30).fill([  20, 1.5]),   // frames  1-30 (super fast)
+      ...Array(30).fill([  40, 1.0]),   // frames 31-60 (fast, easing)
+      ...Array(20).fill([  80, 0.5]),   // frames 61-80 (slowing)
+      ...Array(20).fill([ 150, 0.2]),   // frames 81-100 (dramatic finish)
     ];
 
     // Pick a random name that differs from the previously shown one.
