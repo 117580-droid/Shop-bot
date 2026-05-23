@@ -1,5 +1,77 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+// ─── Wheel graphic constants ──────────────────────────────────────────────────
+
+// Outer-ring segments used to build the visual wheel.  Each position in the
+// ring is one "slot"; the pointer (▼) always sits above index 0.
+const WHEEL_SEGMENTS = ['🎡', '🎰', '🎲', '🎯', '⚡', '💫', '🌀', '🔄'];
+
+/**
+ * Build a text-art spinning wheel embed for the lottery.
+ *
+ * The wheel is rendered as a fixed-width ring of emoji segments with a ▼
+ * pointer above the top slot.  The currently "selected" participant name is
+ * shown prominently in the description so viewers can follow the spin.
+ *
+ * @param {string}  selectedName   Participant name currently at the top.
+ * @param {boolean} isSpinning     true → spinning state; false → landed state.
+ * @param {number}  rotationOffset How many positions the ring has rotated.
+ * @returns {EmbedBuilder}
+ */
+function generateLotteryWheelEmbed(selectedName, isSpinning, rotationOffset = 0) {
+  // ── Build the visual ring ────────────────────────────────────────────────
+  const ringSize   = WHEEL_SEGMENTS.length;
+  const ringEmojis = [];
+  for (let i = 0; i < ringSize; i++) {
+    ringEmojis.push(WHEEL_SEGMENTS[(i + rotationOffset) % ringSize]);
+  }
+
+  // Layout (indices):
+  //   top:    [7] [0] [1]
+  //   sides:  [6]     [2]
+  //   bottom: [5] [4] [3]
+  const top = `${ringEmojis[7]}  ${ringEmojis[0]}  ${ringEmojis[1]}`;
+  const mid = `${ringEmojis[6]}        ${ringEmojis[2]}`;
+  const bot = `${ringEmojis[5]}  ${ringEmojis[4]}  ${ringEmojis[3]}`;
+
+  // Pointer sits above the top-centre slot.
+  const pointer = isSpinning ? '　　　　▼' : '　　　　🎯';
+
+  // ── Status line ──────────────────────────────────────────────────────────
+  const statusLine = isSpinning
+    ? `🌀  **Spinning…**  🌀`
+    : `🎯  **LANDED ON:**  🎯`;
+
+  // ── Name display — fixed-width while spinning so the embed stays stable ──
+  const nameDisplay = isSpinning
+    ? `\`${selectedName.slice(0, 22).padEnd(22)}\``
+    : `✨ **${selectedName}** ✨`;
+
+  // ── Assemble description ─────────────────────────────────────────────────
+  const description = [
+    pointer,
+    '```',
+    `┌─────────────────┐`,
+    `│  ${top}  │`,
+    `│  ${mid}  │`,
+    `│  ${bot}  │`,
+    `└─────────────────┘`,
+    '```',
+    statusLine,
+    nameDisplay,
+  ].join('\n');
+
+  // Embed colour: blue while spinning, gold when landed.
+  const color = isSpinning ? 0x5865F2 : 0xFEE75C;
+
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(isSpinning ? '🎡 Spinning the Lottery Wheel…' : '🎯 The Wheel Has Landed!')
+    .setDescription(description)
+    .setFooter({ text: isSpinning ? 'Spinning…' : `Winner: ${selectedName}` })
+    .setTimestamp();
+}
+
 // ─── Consistent error logger ──────────────────────────────────────────────────
 function logError(context, err) {
   console.error(`[ERROR] lottery/${context}: ${err?.message ?? err}`);
@@ -224,45 +296,68 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     // Final 1-second pause before the spin animation begins.
     await sleep(1_000);
 
-    // ── Step 3: Spinning wheel animation ─────────────────────────────────────
-    const spinFrames = ['🎡', '🎢', '🎠', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎮'];
-    const spinDurationMs = 3_000;
-    const frameIntervalMs = 100;
-    const totalFrames = spinDurationMs / frameIntervalMs; // 30 frames
+    // ── Step 3: Visual spinning wheel animation ───────────────────────────────
+    // Deceleration schedule (ms per frame) — mirrors the POI game wheel.
+    // Total duration ≈ 5.4 s across 14 intermediate frames.
+    //   Frames 1-5  → 150 ms  (fast spin)
+    //   Frames 6-9  → 400 ms  (slowing down)
+    //   Frames 10-12 → 750 ms (crawling)
+    //   Frames 13-14 → 1 000 ms (dramatic pause before landing)
+    const spinDelays = [
+      150, 150, 150, 150, 150,   // frames 1-5  (fast)
+      400, 400, 400, 400,        // frames 6-9  (medium)
+      750, 750, 750,             // frames 10-12 (slow)
+      1000, 1000,                // frames 13-14 (very slow / dramatic)
+    ];
+
+    // Build a flat array of display names (one entry per unique participant)
+    // so the wheel cycles through real entrant names while spinning.
+    const participantNames = uniqueUserIds.map(uid => nameMap.get(uid) ?? `<@${uid}>`);
+
+    // Pick a random name that differs from the previously shown one.
+    function pickRandomName(excludeName) {
+      const pool = participantNames.filter(n => n !== excludeName);
+      // Fall back to the full list if there is only one participant.
+      const source = pool.length ? pool : participantNames;
+      return source[Math.floor(Math.random() * source.length)];
+    }
 
     let spinMsg;
+    let rotation = 0;
+
+    // Send the initial wheel message (frame 0 — already spinning).
     try {
       spinMsg = await channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0xFEE75C)
-            .setTitle('🎡 The Wheel is Spinning!')
-            .setDescription(`${spinFrames[0]} **Spinning…**`),
-        ],
+        embeds: [generateLotteryWheelEmbed(pickRandomName(null), true, rotation)],
       });
     } catch (err) {
       logError('handleLottery: spin message send', err);
     }
 
     if (spinMsg) {
-      for (let i = 1; i <= totalFrames; i++) {
-        await sleep(frameIntervalMs);
-        const frame = spinFrames[i % spinFrames.length];
-        // Only edit every other frame to stay well within Discord's rate limit
-        // (5 edits / 5 s per message), while still looking animated.
-        if (i % 2 === 0) {
-          try {
-            await spinMsg.edit({
-              embeds: [
-                new EmbedBuilder()
-                  .setColor(0xFEE75C)
-                  .setTitle('🎡 The Wheel is Spinning!')
-                  .setDescription(`${frame} **Spinning…**`),
-              ],
-            });
-          } catch (err) {
-            logError('handleLottery: spin frame edit', err);
-          }
+      let lastShownName = null;
+
+      for (let i = 0; i < spinDelays.length; i++) {
+        await sleep(spinDelays[i]);
+
+        const isLastFrame = i === spinDelays.length - 1;
+
+        // On the very last intermediate frame we still show a random name —
+        // the actual winner is revealed in Step 5 via a separate edit.
+        const frameName = pickRandomName(lastShownName);
+        lastShownName   = frameName;
+
+        // Advance the ring rotation: fast frames jump 3 positions, slow frames 1.
+        const jump = i < 5 ? 3 : i < 9 ? 2 : 1;
+        rotation   = (rotation + jump) % WHEEL_SEGMENTS.length;
+
+        try {
+          await spinMsg.edit({
+            embeds: [generateLotteryWheelEmbed(frameName, !isLastFrame, rotation)],
+          });
+        } catch (err) {
+          logError('handleLottery: spin frame edit', err);
+          // Non-fatal — continue the animation even if one frame fails.
         }
       }
     }
@@ -280,36 +375,38 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     // Clear the wheel now that a winner has been chosen.
     clearLottery(db);
 
-    // ── Step 5: Live wheel display with all names + winner highlighted ────────
+    // ── Step 5: Wheel lands — show the visual "landed" state ─────────────────
+    // Edit the spinning wheel message to its final "landed" state, showing the
+    // winner's name under the 🎯 pointer with the gold colour.
+    const landedEmbed = generateLotteryWheelEmbed(winnerDisplayName, false, rotation);
+
+    // Append the full participant list as a field so viewers can see all entrants.
     const wheelLines = uniqueUserIds.map(uid => {
-      const name    = nameMap.get(uid) ?? `<@${uid}>`;
-      const tickets = participants.filter(p => p.user_id === uid).length;
+      const name     = nameMap.get(uid) ?? `<@${uid}>`;
+      const tickets  = participants.filter(p => p.user_id === uid).length;
       const isWinner = uid === winnerId;
       return isWinner
         ? `🏆 **${name}** ← WINNER! (${tickets} ticket${tickets !== 1 ? 's' : ''})`
         : `▫️ ${name} (${tickets} ticket${tickets !== 1 ? 's' : ''})`;
     });
 
-    const wheelEmbed = new EmbedBuilder()
-      .setColor(0xFEE75C)
-      .setTitle('🎡 Lottery Wheel — Final Result')
-      .setDescription(wheelLines.join('\n'))
+    landedEmbed
       .addFields(
         { name: '🎟️ Total Tickets',   value: `${totalTickets}`,  inline: true },
         { name: '👥 Unique Entrants', value: `${uniqueEntries}`, inline: true },
+        { name: '🏅 Entrants',        value: wheelLines.join('\n') || '—', inline: false },
       )
-      .setFooter({ text: 'The wheel has been cleared. Buy a new ticket to enter the next round!' })
-      .setTimestamp();
+      .setFooter({ text: 'The wheel has been cleared. Buy a new ticket to enter the next round!' });
 
     try {
       if (spinMsg) {
-        await spinMsg.edit({ embeds: [wheelEmbed] });
+        await spinMsg.edit({ embeds: [landedEmbed] });
       } else {
-        await channel.send({ embeds: [wheelEmbed] });
+        await channel.send({ embeds: [landedEmbed] });
       }
     } catch (err) {
       logError('handleLottery: wheel result edit', err);
-      try { await channel.send({ embeds: [wheelEmbed] }); } catch { /* non-fatal */ }
+      try { await channel.send({ embeds: [landedEmbed] }); } catch { /* non-fatal */ }
     }
 
     // ── Step 6: Final winner announcement ────────────────────────────────────
