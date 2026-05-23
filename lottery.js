@@ -2,16 +2,17 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 // ─── Wheel graphic constants ──────────────────────────────────────────────────
 
-// Outer-ring segments used to build the visual wheel.  Each position in the
-// ring is one "slot"; the pointer (▼) always sits above index 0.
-const WHEEL_SEGMENTS = ['🎡', '🎰', '🎲', '🎯', '⚡', '💫', '🌀', '🔄'];
+// Spinning emoji sequence cycled through during the animation.
+// Discord renders these reliably inside embeds.
+const WHEEL_SEGMENTS = ['🎡', '🎢', '🎠', '🎪', '🎭', '🎨', '🎬', '🎤'];
 
 /**
- * Build a text-art spinning wheel embed for the lottery.
+ * Build a simple emoji-based spinning wheel embed for the lottery.
  *
- * The wheel is rendered as a fixed-width ring of emoji segments with a ▼
- * pointer above the top slot.  The currently "selected" participant name is
- * shown prominently in the description so viewers can follow the spin.
+ * Uses only Discord-safe emoji characters — no box-drawing or special Unicode
+ * that embeds can't render.  The spinning emoji cycles through WHEEL_SEGMENTS
+ * so viewers see clear motion, and the currently selected participant name is
+ * shown prominently so the spin is easy to follow.
  *
  * @param {string}  selectedName   Participant name currently at the top.
  * @param {boolean} isSpinning     true → spinning state; false → landed state.
@@ -19,46 +20,34 @@ const WHEEL_SEGMENTS = ['🎡', '🎰', '🎲', '🎯', '⚡', '💫', '🌀', '
  * @returns {EmbedBuilder}
  */
 function generateLotteryWheelEmbed(selectedName, isSpinning, rotationOffset = 0) {
-  // ── Build the visual ring ────────────────────────────────────────────────
-  const ringSize   = WHEEL_SEGMENTS.length;
-  const ringEmojis = [];
-  for (let i = 0; i < ringSize; i++) {
-    ringEmojis.push(WHEEL_SEGMENTS[(i + rotationOffset) % ringSize]);
-  }
-
-  // Layout (indices):
-  //   top:    [7] [0] [1]
-  //   sides:  [6]     [2]
-  //   bottom: [5] [4] [3]
-  const top = `${ringEmojis[7]}  ${ringEmojis[0]}  ${ringEmojis[1]}`;
-  const mid = `${ringEmojis[6]}        ${ringEmojis[2]}`;
-  const bot = `${ringEmojis[5]}  ${ringEmojis[4]}  ${ringEmojis[3]}`;
-
-  // Pointer sits above the top-centre slot.
-  const pointer = isSpinning ? '　　　　▼' : '　　　　🎯';
+  // ── Pick the current spinning emoji from the sequence ────────────────────
+  const spinEmoji = WHEEL_SEGMENTS[rotationOffset % WHEEL_SEGMENTS.length];
 
   // ── Status line ──────────────────────────────────────────────────────────
   const statusLine = isSpinning
     ? `🌀  **Spinning…**  🌀`
     : `🎯  **LANDED ON:**  🎯`;
 
-  // ── Name display — fixed-width while spinning so the embed stays stable ──
+  // ── Name display ─────────────────────────────────────────────────────────
   const nameDisplay = isSpinning
-    ? `\`${selectedName.slice(0, 22).padEnd(22)}\``
-    : `✨ **${selectedName}** ✨`;
+    ? `> 🎰  **${selectedName}**`
+    : `> ✨  **${selectedName}**  ✨`;
+
+  // ── Pointer arrow ─────────────────────────────────────────────────────────
+  const pointer = isSpinning ? '⬇️' : '🎯';
 
   // ── Assemble description ─────────────────────────────────────────────────
+  // Simple layout: spinning emoji row → pointer → participant name → status.
+  // Every character here is a standard emoji or plain text — fully visible
+  // in Discord embeds on all platforms.
+  const wheelRow = `${spinEmoji} ${spinEmoji} ${spinEmoji} ${spinEmoji} ${spinEmoji}`;
+
   const description = [
-    pointer,
-    '```',
-    `┌─────────────────┐`,
-    `│  ${top}  │`,
-    `│  ${mid}  │`,
-    `│  ${bot}  │`,
-    `└─────────────────┘`,
-    '```',
-    statusLine,
+    wheelRow,
+    `${pointer}  ${pointer}  ${pointer}`,
     nameDisplay,
+    '',
+    statusLine,
   ].join('\n');
 
   // Embed colour: blue while spinning, gold when landed.
