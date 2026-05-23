@@ -327,6 +327,16 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       });
     }
 
+    // ── Clear current round from DB ───────────────────────────────────────────
+    // Remove this round's participants from the database immediately so any
+    // tickets bought while the spin is in progress count toward the NEXT round.
+    // The `participants` snapshot captured above is used for the entire spin.
+    // The website reset is also sent now so the wheel clears the previous
+    // round's display before the new spin animation begins — names from the
+    // last spin stay visible until this point.
+    clearLottery(db);
+    await sendWebhook({ action: 'reset' });
+
     const totalTickets  = participants.length;
     const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
     const uniqueEntries = uniqueUserIds.length;
@@ -534,9 +544,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     const winnerDisplayName = nameMap.get(winnerId) ?? `<@${winnerId}>`;
     const winnerTag = `${winnerDisplayName} (<@${winnerId}>)`;
 
-    // Clear the wheel now that a winner has been chosen.
-    clearLottery(db);
-
     // ── Step 5: Wheel lands — show the visual "landed" state ─────────────────
     // Edit the spinning wheel message to its final "landed" state, showing the
     // winner's name under the 🎯 pointer with the gold colour.
@@ -559,7 +566,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         { name: '👥 Unique Entrants', value: `${uniqueEntries}`, inline: true },
         { name: '🏅 Entrants',        value: wheelLines.join('\n') || '—', inline: false },
       )
-      .setFooter({ text: 'The wheel has been cleared. Buy a new ticket to enter the next round!' });
+      .setFooter({ text: 'Buy a ticket to enter the next round!' });
 
     try {
       if (spinMsg) {
@@ -636,12 +643,6 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       logError('handleLottery: DM winner', err);
       // Non-fatal — the coins were still awarded and the result was posted publicly
     }
-
-    // ── Webhook: reset ────────────────────────────────────────────────────────
-    // Notify the website to clear all participants, the winner, and the timer so
-    // the wheel returns to an empty state ready for the next round.
-    // Fire-and-forget — failure must not affect the Discord flow.
-    await sendWebhook({ action: 'reset' });
 
   } catch (err) {
     logError('handleLottery', err);
