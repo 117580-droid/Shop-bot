@@ -194,6 +194,98 @@ const scheduledUnmutes = new Map();
 // was sent at the start of the spin rather than the (empty) next-round list.
 let isSpinning = false;
 
+// ─── Spin result callback server ──────────────────────────────────────────────
+//
+// The lottery wheel website POSTs the winner back to this bot via a lightweight
+// HTTP server.  The bot listens on BOT_CALLBACK_PORT (default: 3000).
+//
+// Endpoint: POST /api/result
+// Body:     { "winner": "<display name>" }
+//
+// handleLottery calls waitForSpinResult(timeoutMs) which returns a Promise that
+// resolves to { winner } when the website calls back, or resolves to null if no
+// callback arrives within `timeoutMs` milliseconds (graceful fallback).
+//
+const http = require('http');
+
+// Holds the resolve function for the currently-pending spin result promise.
+// Only one spin can be in progress at a time, so a single slot is sufficient.
+let _spinResultResolve = null;
+
+/**
+ * Returns a Promise that resolves to { winner: string } when the website POSTs
+ * the spin result, or resolves to null after `timeoutMs` milliseconds.
+ *
+ * @param {number} timeoutMs - How long to wait before giving up (default 30 s).
+ * @returns {Promise<{winner: string}|null>}
+ */
+function waitForSpinResult(timeoutMs = 30_000) {
+  return new Promise(resolve => {
+    // Register the resolver so the HTTP handler can call it.
+    _spinResultResolve = resolve;
+
+    // Auto-resolve with null after the timeout so the bot never hangs.
+    setTimeout(() => {
+      if (_spinResultResolve === resolve) {
+        _spinResultResolve = null;
+        log('WARN', 'waitForSpinResult: timed out — falling back to random winner selection.');
+        resolve(null);
+      }
+    }, timeoutMs);
+  });
+}
+
+// Start the HTTP server that receives the result callback from the website.
+const CALLBACK_PORT = parseInt(process.env.BOT_CALLBACK_PORT ?? '3000', 10);
+
+const callbackServer = http.createServer((req, res) => {
+  // Only handle POST /api/result
+  if (req.method === 'POST' && req.url === '/api/result') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        log('INFO', `callbackServer: received spin result — winner: "${data.winner}"`);
+
+        if (_spinResultResolve) {
+          const resolve = _spinResultResolve;
+          _spinResultResolve = null;
+          resolve({ winner: data.winner ?? null });
+        } else {
+          log('WARN', 'callbackServer: received result but no spin is waiting for a callback.');
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        logError('callbackServer: parse error', err);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+      }
+    });
+    return;
+  }
+
+  // Health check — useful for Railway's health probe.
+  if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, service: 'shop-bot' }));
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ ok: false, error: 'Not found' }));
+});
+
+callbackServer.listen(CALLBACK_PORT, () => {
+  log('INFO', `Spin result callback server listening on port ${CALLBACK_PORT}.`);
+});
+
+callbackServer.on('error', err => {
+  logError('callbackServer', err);
+});
+
 /**
  * Process any pending unbans and unmutes whose time has elapsed.
  * Called every minute from the main setInterval loop.
@@ -1061,7 +1153,7 @@ client.on('interactionCreate', async (interaction) => {
 
       isSpinning = true;
       try {
-        return await handleLottery(interaction, db, client, updateBalance, targetGuild);
+        return await handleLottery(interaction, db, client, updateBalance, targetGuild, waitForSpinResult);
       } finally {
         isSpinning = false;
       }
