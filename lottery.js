@@ -2,66 +2,165 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 // ─── Wheel graphic constants ──────────────────────────────────────────────────
 
-// Outer-ring segments used to build the visual wheel.  Each position in the
-// ring is one "slot"; the pointer (▼) always sits above index 0.
-const WHEEL_SEGMENTS = ['🎡', '🎰', '🎲', '🎯', '⚡', '💫', '🌀', '🔄'];
+// Number of named slots around the wheel.  Must stay at 8 so the ASCII art
+// positions (top, top-right, right, bottom-right, bottom, bottom-left, left,
+// top-left) map 1-to-1 onto the SLOT_* layout constants below.
+const WHEEL_SLOTS = 8;
+
+// Decorative centre icons that cycle while the wheel is spinning.
+const CENTER_ICONS = ['🎰', '🌀', '💫', '⭐', '🌟', '✨', '🎲', '🎯'];
+
+// Divider lines used inside the wheel ring to suggest segment boundaries.
+// Each entry is one of four diagonal/straight spoke characters.
+const SPOKES = ['╱', '│', '╲', '─', '╱', '│', '╲', '─'];
 
 /**
- * Build a text-art spinning wheel embed for the lottery.
+ * Truncate a display name so it fits inside a wheel slot without breaking the
+ * layout.  Slots have a maximum of 10 visible characters.
+ */
+function truncateName(name, max = 10) {
+  if (name.length <= max) return name;
+  return name.slice(0, max - 1) + '…';
+}
+
+/**
+ * Pad a name to exactly `width` characters (centred) using spaces.
+ * Used to keep the wheel ring columns aligned.
+ */
+function padCenter(str, width) {
+  const pad = Math.max(0, width - str.length);
+  const left  = Math.floor(pad / 2);
+  const right = pad - left;
+  return ' '.repeat(left) + str + ' '.repeat(right);
+}
+
+/**
+ * Build a real ASCII roulette-wheel embed.
  *
- * The wheel is rendered as a fixed-width ring of emoji segments with a ▼
- * pointer above the top slot.  The currently "selected" participant name is
- * shown prominently in the description so viewers can follow the spin.
+ * The wheel has 8 named slots arranged around a circle.  The `rotationOffset`
+ * parameter shifts which participant name appears in each slot, creating the
+ * illusion of the wheel rotating.  A fixed ▼ pointer sits above the top slot
+ * so viewers can see which name is "under the needle".
  *
- * @param {string}  selectedName   Participant name currently at the top.
- * @param {boolean} isSpinning     true → spinning state; false → landed state.
- * @param {number}  rotationOffset How many positions the ring has rotated.
+ * Layout (code-block, monospace):
+ *
+ *              ▼  ← pointer (fixed)
+ *        ┌─────────────┐
+ *   [TL] │  [T]  │  [TR] │
+ *        │───────┼───────│
+ *   [L]  │  [C]  │  [R]  │
+ *        │───────┼───────│
+ *   [BL] │  [B]  │  [BR] │
+ *        └─────────────┘
+ *
+ * @param {string[]} participantNames  All unique participant display names.
+ * @param {string}   selectedName      Name currently under the pointer (top slot).
+ * @param {boolean}  isSpinning        true → spinning; false → landed.
+ * @param {number}   rotationOffset    How many slots the wheel has rotated.
  * @returns {EmbedBuilder}
  */
-function generateLotteryWheelEmbed(selectedName, isSpinning, rotationOffset = 0) {
-  // ── Build the visual ring ────────────────────────────────────────────────
-  const ringSize   = WHEEL_SEGMENTS.length;
-  const ringEmojis = [];
-  for (let i = 0; i < ringSize; i++) {
-    ringEmojis.push(WHEEL_SEGMENTS[(i + rotationOffset) % ringSize]);
+function generateLotteryWheelEmbed(participantNames, selectedName, isSpinning, rotationOffset = 0) {
+  const total = participantNames.length;
+
+  // ── Build the 8-slot ring ─────────────────────────────────────────────────
+  // Slot indices (clockwise from top):
+  //   0 = top, 1 = top-right, 2 = right, 3 = bottom-right,
+  //   4 = bottom, 5 = bottom-left, 6 = left, 7 = top-left
+  //
+  // We rotate the participant list by `rotationOffset` so slot 0 always shows
+  // the "current" name under the pointer.
+  const slots = Array.from({ length: WHEEL_SLOTS }, (_, i) => {
+    if (total === 0) return '———';
+    const nameIdx = (rotationOffset + i) % total;
+    return truncateName(participantNames[nameIdx], 10);
+  });
+
+  // Slot aliases for readability
+  const [sTop, sTR, sRight, sBR, sBot, sBL, sLeft, sTL] = slots;
+
+  // ── Centre icon ───────────────────────────────────────────────────────────
+  const centerIcon = isSpinning
+    ? CENTER_ICONS[rotationOffset % CENTER_ICONS.length]
+    : '🏆';
+
+  // ── Spoke character (rotates to suggest motion) ───────────────────────────
+  const spoke = SPOKES[rotationOffset % SPOKES.length];
+
+  // ── Highlight the top slot (under the pointer) ────────────────────────────
+  const topLabel    = isSpinning ? `◀ ${padCenter(sTop, 10)} ▶` : `★ ${padCenter(sTop, 10)} ★`;
+  const tlLabel     = padCenter(sTL,    10);
+  const trLabel     = padCenter(sTR,    10);
+  const leftLabel   = padCenter(sLeft,  10);
+  const rightLabel  = padCenter(sRight, 10);
+  const blLabel     = padCenter(sBL,    10);
+  const brLabel     = padCenter(sBR,    10);
+  const botLabel    = padCenter(sBot,   10);
+
+  // ── Assemble the wheel as a monospace code block ──────────────────────────
+  //
+  // The wheel is drawn as a 7-row ASCII diagram inside a Discord code block.
+  // Each row is exactly the same width so the circle looks round.
+  //
+  //   Row 0:          ▼  (pointer, centred above top slot)
+  //   Row 1:    ╭──────────────────────────╮
+  //   Row 2:    │  [TL]   [TOP]   [TR]     │
+  //   Row 3:    │  [L]   [icon]   [R]      │
+  //   Row 4:    │  [BL]   [BOT]   [BR]     │
+  //   Row 5:    ╰──────────────────────────╯
+  //
+  // We use a fixed-width inner area of 34 chars so names up to 10 chars each
+  // fit comfortably with separators.
+
+  const W = 36; // inner width of the wheel (between the │ borders)
+
+  function row(...cols) {
+    // Join columns with a spoke separator and pad the whole row to W chars.
+    const inner = cols.join(` ${spoke} `);
+    const padded = inner.padEnd(W);
+    return `│${padded}│`;
   }
 
-  // Layout (indices):
-  //   top:    [7] [0] [1]
-  //   sides:  [6]     [2]
-  //   bottom: [5] [4] [3]
-  const top = `${ringEmojis[7]}  ${ringEmojis[0]}  ${ringEmojis[1]}`;
-  const mid = `${ringEmojis[6]}        ${ringEmojis[2]}`;
-  const bot = `${ringEmojis[5]}  ${ringEmojis[4]}  ${ringEmojis[3]}`;
+  const topBorder = `╭${'─'.repeat(W)}╮`;
+  const midDiv    = `├${'─'.repeat(W)}┤`;
+  const botBorder = `╰${'─'.repeat(W)}╯`;
 
-  // Pointer sits above the top-centre slot.
-  const pointer = isSpinning ? '　　　　▼' : '　　　　🎯';
+  // Pointer line — centred over the top-slot column (roughly col 2 of 3).
+  // The top slot is in the middle column, so we offset the pointer accordingly.
+  const pointerOffset = Math.floor(W / 2);
+  const pointerLine   = ' '.repeat(pointerOffset) + '▼';
 
-  // ── Status line ──────────────────────────────────────────────────────────
+  const wheelLines = [
+    pointerLine,
+    topBorder,
+    row(tlLabel, topLabel, trLabel),
+    midDiv,
+    row(leftLabel, ` ${centerIcon} `.padEnd(12), rightLabel),
+    midDiv,
+    row(blLabel, botLabel, brLabel),
+    botBorder,
+  ];
+
+  // ── Status line ───────────────────────────────────────────────────────────
   const statusLine = isSpinning
-    ? `🌀  **Spinning…**  🌀`
-    : `🎯  **LANDED ON:**  🎯`;
+    ? `🌀  **Spinning…**`
+    : `🎯  **LANDED ON:  ${selectedName}**`;
 
-  // ── Name display — fixed-width while spinning so the embed stays stable ──
-  const nameDisplay = isSpinning
-    ? `\`${selectedName.slice(0, 22).padEnd(22)}\``
-    : `✨ **${selectedName}** ✨`;
+  // ── Current selection callout ─────────────────────────────────────────────
+  const selectionLine = isSpinning
+    ? `**Under the pointer →** ${selectedName}`
+    : `🏆  **${selectedName}**  🏆`;
 
-  // ── Assemble description ─────────────────────────────────────────────────
+  // ── Full description ──────────────────────────────────────────────────────
   const description = [
-    pointer,
     '```',
-    `┌─────────────────┐`,
-    `│  ${top}  │`,
-    `│  ${mid}  │`,
-    `│  ${bot}  │`,
-    `└─────────────────┘`,
+    ...wheelLines,
     '```',
+    '',
+    selectionLine,
     statusLine,
-    nameDisplay,
   ].join('\n');
 
-  // Embed colour: blue while spinning, gold when landed.
+  // Embed colour: blurple while spinning, gold when landed.
   const color = isSpinning ? 0x5865F2 : 0xFEE75C;
 
   return new EmbedBuilder()
@@ -337,11 +436,12 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     // Send the initial wheel message (frame 0 — already spinning).
     try {
       spinMsg = await channel.send({
-        embeds: [generateLotteryWheelEmbed(pickRandomName(null), true, rotation)],
+        embeds: [generateLotteryWheelEmbed(participantNames, pickRandomName(null), true, rotation)],
       });
     } catch (err) {
       logError('handleLottery: spin message send', err);
     }
+
 
     if (spinMsg) {
       let lastShownName = null;
@@ -357,17 +457,19 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         lastShownName   = frameName;
 
         // Advance the ring rotation: fast frames jump 3 positions, slow frames 1.
+        // Modulo by the number of participants (min 1) so the index stays in range.
         const jump = i < 5 ? 3 : i < 9 ? 2 : 1;
-        rotation   = (rotation + jump) % WHEEL_SEGMENTS.length;
+        rotation   = (rotation + jump) % Math.max(participantNames.length, 1);
 
         try {
           await spinMsg.edit({
-            embeds: [generateLotteryWheelEmbed(frameName, !isLastFrame, rotation)],
+            embeds: [generateLotteryWheelEmbed(participantNames, frameName, !isLastFrame, rotation)],
           });
         } catch (err) {
           logError('handleLottery: spin frame edit', err);
           // Non-fatal — continue the animation even if one frame fails.
         }
+
       }
     }
 
@@ -387,7 +489,8 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
     // ── Step 5: Wheel lands — show the visual "landed" state ─────────────────
     // Edit the spinning wheel message to its final "landed" state, showing the
     // winner's name under the 🎯 pointer with the gold colour.
-    const landedEmbed = generateLotteryWheelEmbed(winnerDisplayName, false, rotation);
+    const landedEmbed = generateLotteryWheelEmbed(participantNames, winnerDisplayName, false, rotation);
+
 
     // Append the full participant list as a field so viewers can see all entrants.
     const wheelLines = uniqueUserIds.map(uid => {
