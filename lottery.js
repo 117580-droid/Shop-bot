@@ -638,4 +638,4 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
   }
 }
 
-module.exports = { commands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants, clearLottery };
+module.exports = { commands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants, clearLottery, sendWebhook };
