@@ -418,6 +418,7 @@ const callbackServer = http.createServer((req, res) => {
 
   // Discord data endpoint — the website calls this to populate timeout dropdowns
   if (req.method === 'GET' && req.url === '/api/discord-data') {
+    (async () => {
     try {
       const servers = client.guilds.cache.map(guild => ({
         id: guild.id,
@@ -447,6 +448,7 @@ const callbackServer = http.createServer((req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: 'Failed to fetch Discord data' }));
     }
+    })();
     return;
   }
 
