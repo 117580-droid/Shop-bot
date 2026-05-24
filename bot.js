@@ -861,6 +861,10 @@ const commands = [
         .setRequired(false)
         .setAutocomplete(true)
     ),
+
+  new SlashCommandBuilder()
+    .setName('website')
+    .setDescription('Get the link to the Coin Shop Hub website'),
 ];
 
 // ─── Register Commands ─────────────────────────────────────────────────────────
@@ -1712,6 +1716,22 @@ client.on('interactionCreate', async (interaction) => {
             .setColor(0xFEE75C)
             .setTitle('💰 Your Balance')
             .setDescription(`You have **${balance} coins**.`)
+            .setTimestamp()
+        ]
+      });
+    }
+
+    // ── /website ──────────────────────────────────────────────────────────────
+    if (commandName === 'website') {
+      return await safeReply(interaction, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x00e5cc)
+            .setTitle('🌐 Coin Shop Hub')
+            .setDescription('Visit the Coin Shop Hub website to manage your coins and shop!')
+            .addFields(
+              { name: 'Website URL', value: 'https://coin-shop-hub-production.up.railway.app/', inline: false }
+            )
             .setTimestamp()
         ]
       });
