@@ -416,29 +416,35 @@ const callbackServer = http.createServer((req, res) => {
     return;
   }
 
-  // Discord data endpoint — the website calls this to populate timeout dropdowns
+  // Discord data endpoint — returns hardcoded server for timeout feature
   if (req.method === 'GET' && req.url === '/api/discord-data') {
     (async () => {
     try {
-      const servers = client.guilds.cache.map(guild => ({
-        id: guild.id,
-        name: guild.name,
-      }));
+      const serverId = '1491248747181641848';
+      const guild = client.guilds.cache.get(serverId);
+      
+      if (!guild) {
+        log('WARN', `Bot is not in server ${serverId}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ servers: [], members: {} }));
+        return;
+      }
 
+      const servers = [{ id: guild.id, name: guild.name }];
       const members = {};
-      for (const guild of client.guilds.cache.values()) {
-        try {
-          const guildMembers = await guild.members.fetch();
-          members[guild.id] = guildMembers
-            .filter(m => !m.user.bot)
-            .map(m => ({
-              id: m.user.id,
-              username: m.user.username,
-            }));
-        } catch (err) {
-          log('WARN', `Could not fetch members for guild ${guild.id}: ${err.message}`);
-          members[guild.id] = [];
-        }
+
+      try {
+        const guildMembers = await guild.members.fetch();
+        members[guild.id] = guildMembers
+          .filter(m => !m.user.bot)
+          .map(m => ({
+            id: m.user.id,
+            username: m.user.username,
+          }));
+        log('INFO', `Fetched ${members[guild.id].length} members from server ${guild.name}`);
+      } catch (err) {
+        log('WARN', `Could not fetch members for guild ${guild.id}: ${err.message}`);
+        members[guild.id] = [];
       }
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
