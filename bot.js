@@ -730,6 +730,11 @@ const commands = [
     .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
     .addIntegerOption(o => o.setName('amount').setDescription('Amount of coins').setRequired(true))
     .addStringOption(o =>
+      o.setName('reason')
+        .setDescription('Reason for giving coins (shown in transaction history)')
+        .setRequired(false)
+    )
+    .addStringOption(o =>
       o.setName('server')
         .setDescription('Server name or ID (DM use only; used to log which server the coins were given in)')
         .setRequired(false)
@@ -1745,6 +1750,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const target = interaction.options.getUser('user');
       const amount = interaction.options.getInteger('amount');
+      const reason = (interaction.options.getString('reason') ?? '').trim() || 'No reason provided';
 
       if (!target) {
         return await safeReply(interaction, { content: '❌ Could not resolve the target user.', ephemeral: true });
@@ -1759,12 +1765,14 @@ client.on('interactionCreate', async (interaction) => {
 
       // Sync the coin change to the website in the background.
       sendCoinShopWebhook({
-        action: 'add',
-        userId: target.id,
-        amount,
+        action:    'add',
+        userId:    target.id,
+        coins:     amount,
+        username:  target.username,
+        reason,
       }).catch(err => logError('givecoin: sendCoinShopWebhook', err));
 
-      log('INFO', `givecoin: ${user.username} (${user.id}) gave ${amount} coins to ${target.username} (${target.id}). New balance: ${newBal}.`);
+      log('INFO', `givecoin: ${user.username} (${user.id}) gave ${amount} coins to ${target.username} (${target.id}). Reason: "${reason}". New balance: ${newBal}.`);
 
       return await safeReply(interaction, {
         embeds: [
@@ -1775,6 +1783,7 @@ client.on('interactionCreate', async (interaction) => {
             .addFields(
               { name: 'Server',      value: giveGuild.name,        inline: true },
               { name: 'New Balance', value: `🪙 ${newBal} coins`, inline: true },
+              { name: 'Reason',      value: reason,                inline: false },
             )
             .setTimestamp()
         ]
