@@ -345,6 +345,77 @@ const callbackServer = http.createServer((req, res) => {
     return;
   }
 
+  // Timeout request — the coin-shop website POSTs here when a user buys
+  // the timeout item so the bot can timeout a user in a Discord server.
+  if (req.method === 'POST' && req.url === '/api/timeout') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { executorId, executorUsername, targetUserId, targetUsername, serverId, serverName, durationMinutes } = JSON.parse(body);
+        log('INFO', `callbackServer: timeout request — executor: "${executorUsername}" (${executorId}), target: "${targetUsername}" (${targetUserId}), server: "${serverName}" (${serverId}), duration: ${durationMinutes}m`);
+
+        try {
+          // Resolve the guild
+          let guild = null;
+          if (serverId.match(/^\d+$/)) {
+            // It's a numeric ID
+            guild = await client.guilds.fetch(serverId);
+          } else {
+            // It's a server name — search for it
+            guild = client.guilds.cache.find(g => g.name.toLowerCase() === serverId.toLowerCase());
+          }
+
+          if (!guild) {
+            log('WARN', `callbackServer: could not find guild "${serverId}"`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Guild not found' }));
+            return;
+          }
+
+          // Resolve the target member
+          let member = null;
+          if (targetUserId.match(/^\d+$/)) {
+            // It's a numeric ID
+            try {
+              member = await guild.members.fetch(targetUserId);
+            } catch {
+              log('WARN', `callbackServer: could not fetch member ${targetUserId} in guild ${guild.id}`);
+            }
+          } else {
+            // It's a username — search for it
+            const members = await guild.members.fetch();
+            member = members.find(m => m.user.username.toLowerCase() === targetUserId.toLowerCase());
+          }
+
+          if (!member) {
+            log('WARN', `callbackServer: could not find member "${targetUserId}" in guild ${guild.id}`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Member not found in guild' }));
+            return;
+          }
+
+          // Apply the timeout
+          const durationMs = durationMinutes * 60 * 1000;
+          await member.timeout(durationMs, `Timeout purchased by ${executorUsername} via Coin Shop Hub`);
+          log('INFO', `callbackServer: timed out ${member.user.username} (${member.id}) in guild ${guild.id} for ${durationMinutes} minutes`);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, message: `${member.user.username} has been timed out for ${durationMinutes} minutes` }));
+        } catch (timeoutErr) {
+          logError('callbackServer: timeout execution error', timeoutErr);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Failed to apply timeout' }));
+        }
+      } catch (err) {
+        logError('callbackServer: timeout parse error', err);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+      }
+    });
+    return;
+  }
+
   // Health check — useful for Railway's health probe.
   if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
