@@ -416,6 +416,40 @@ const callbackServer = http.createServer((req, res) => {
     return;
   }
 
+  // Discord data endpoint — the website calls this to populate timeout dropdowns
+  if (req.method === 'GET' && req.url === '/api/discord-data') {
+    try {
+      const servers = client.guilds.cache.map(guild => ({
+        id: guild.id,
+        name: guild.name,
+      }));
+
+      const members = {};
+      for (const guild of client.guilds.cache.values()) {
+        try {
+          const guildMembers = await guild.members.fetch();
+          members[guild.id] = guildMembers
+            .filter(m => !m.user.bot)
+            .map(m => ({
+              id: m.user.id,
+              username: m.user.username,
+            }));
+        } catch (err) {
+          log('WARN', `Could not fetch members for guild ${guild.id}: ${err.message}`);
+          members[guild.id] = [];
+        }
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ servers, members }));
+    } catch (err) {
+      logError('callbackServer: discord-data error', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'Failed to fetch Discord data' }));
+    }
+    return;
+  }
+
   // Health check — useful for Railway's health probe.
   if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
