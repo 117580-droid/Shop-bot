@@ -3,5 +3,8 @@
   "deploy": {
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
+  },
+  "variables": {
+    "BOT_CALLBACK_URL": "http://shop-bot.railway.internal:3000"
   }
 }
