@@ -416,37 +416,34 @@ const callbackServer = http.createServer((req, res) => {
     return;
   }
 
-  // Discord data endpoint — returns hardcoded server for timeout feature
+  // Discord data endpoint — returns all servers the bot is in with their members
   if (req.method === 'GET' && req.url === '/api/discord-data') {
     (async () => {
     try {
-      const serverId = '1491248747181641848';
-      const guild = client.guilds.cache.get(serverId);
-      
-      if (!guild) {
-        log('WARN', `Bot is not in server ${serverId}`);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ servers: [], members: {} }));
-        return;
-      }
+      const servers = client.guilds.cache.map(guild => ({
+        id: guild.id,
+        name: guild.name,
+      }));
 
-      const servers = [{ id: guild.id, name: guild.name }];
       const members = {};
 
-      try {
-        const guildMembers = await guild.members.fetch();
-        members[guild.id] = guildMembers
-          .filter(m => !m.user.bot)
-          .map(m => ({
-            id: m.user.id,
-            username: m.user.username,
-          }));
-        log('INFO', `Fetched ${members[guild.id].length} members from server ${guild.name}`);
-      } catch (err) {
-        log('WARN', `Could not fetch members for guild ${guild.id}: ${err.message}`);
-        members[guild.id] = [];
+      for (const guild of client.guilds.cache.values()) {
+        try {
+          const guildMembers = await guild.members.fetch();
+          members[guild.id] = guildMembers
+            .filter(m => !m.user.bot)
+            .map(m => ({
+              id: m.user.id,
+              username: m.user.username,
+            }));
+          log('INFO', `Fetched ${members[guild.id].length} members from server ${guild.name}`);
+        } catch (err) {
+          log('WARN', `Could not fetch members for guild ${guild.id}: ${err.message}`);
+          members[guild.id] = [];
+        }
       }
 
+      log('INFO', `Discord data: ${servers.length} servers, ${Object.keys(members).length} servers with members`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ servers, members }));
     } catch (err) {
