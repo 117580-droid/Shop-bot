@@ -429,16 +429,19 @@ const callbackServer = http.createServer((req, res) => {
 
       for (const guild of client.guilds.cache.values()) {
         try {
+          log('INFO', `Fetching members for guild: ${guild.name} (${guild.id})`);
           const guildMembers = await guild.members.fetch();
+          log('INFO', `Successfully fetched ${guildMembers.size} members from ${guild.name}`);
+
           members[guild.id] = guildMembers
             .filter(m => !m.user.bot)
             .map(m => ({
               id: m.user.id,
               username: m.user.username,
             }));
-          log('INFO', `Fetched ${members[guild.id].length} members from server ${guild.name}`);
+          log('INFO', `Filtered to ${members[guild.id].length} non-bot members from ${guild.name}`);
         } catch (err) {
-          log('WARN', `Could not fetch members for guild ${guild.id}: ${err.message}`);
+          log('ERROR', `Failed to fetch members for guild ${guild.name} (${guild.id}): ${err.message}`);
           members[guild.id] = [];
         }
       }
@@ -995,6 +998,7 @@ async function registerCommands() {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
