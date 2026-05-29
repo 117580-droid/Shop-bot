@@ -664,8 +664,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
-                `🪙 1 coin **${user.username}** found where **Sam** was hiding\n\n` +
-                (OWNER_ID ? `DM <@${OWNER_ID}> to claim your win!` : 'Contact the owner to claim your win!')
+                `🪙 1 coin **${user.username}** found Sam in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your coins!`
               )
               .setFooter({ text: poi.name })
               .setTimestamp()
