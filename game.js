@@ -656,9 +656,6 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
           0x57F287,
         );
 
-        // Run the spinning animation — lands on the correct POI as the final frame.
-        await spinWheelAnimation(interaction, FORTNITE_POIS, poi);
-
         // Final reveal: correct guess result.
         return await interaction.editReply({
           embeds: [
@@ -689,9 +686,6 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
           `**${user.username}** (<@${user.id}>) guessed **${guess}** but Sam was at **${revealedPoi.name}**.\nNew hiding spot: **${currentPoi.name}**`,
           0xED4245,
         );
-
-        // Run the spinning animation — lands on the actual POI as the final frame.
-        await spinWheelAnimation(interaction, FORTNITE_POIS, revealedPoi);
 
         // Final reveal: wrong guess result.
         return await interaction.editReply({
