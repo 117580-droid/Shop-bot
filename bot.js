@@ -228,6 +228,9 @@ function formatDuration(ms) {
   return 'less than a minute';
 }
 
+// Cache for guild members to return when rate-limited
+const memberCache = {};
+
 // Scheduled unbans: key = `${guildId}:${userId}`, value = { guildId, userId, unbanAt }
 const scheduledUnbans = new Map();
 
@@ -439,10 +442,17 @@ const callbackServer = http.createServer((req, res) => {
               id: m.user.id,
               username: m.user.username,
             }));
+          
+          // Update cache with fresh members
+          memberCache[guild.id] = members[guild.id];
+          
           log('INFO', `Filtered to ${members[guild.id].length} non-bot members from ${guild.name}`);
         } catch (err) {
           log('ERROR', `Failed to fetch members for guild ${guild.name} (${guild.id}): ${err.message}`);
-          members[guild.id] = [];
+          
+          // Return cached members if available, otherwise empty array
+          members[guild.id] = memberCache[guild.id] || [];
+          log('INFO', `Using cached members for ${guild.name}: ${members[guild.id].length} members`);
         }
       }
 
