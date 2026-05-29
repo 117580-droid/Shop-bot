@@ -168,7 +168,7 @@ const FORTNITE_POIS = [
   { name: 'Snooty Steppes',    image: POI_IMAGES['Snooty Steppes']    ?? POI_FALLBACK },
 ];
 
-const COOLDOWN_MS = 90 * 60 * 1000;
+const COOLDOWN_MS = 120 * 60 * 1000;
 const ITEM_GUESS_COOLDOWN_MS = 30 * 1000; // 30-second cooldown for /guessitem
 
 // ─── Consistent error logger ──────────────────────────────────────────────────
