@@ -615,9 +615,9 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
     if (commandName === 'guess') {
       const poi = getCurrentPoi();
 
-      const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+      const isOwner = false; // Everyone gets cooldown
       const remaining = getCooldownRemaining(user.id);
-      if (!isOwner && remaining > 0) {
+      if (remaining > 0) {
         return await safeReply(interaction, {
           content: `⏳ You guessed recently! You can guess again in **${formatMs(remaining)}**.`,
           ephemeral: true,
@@ -641,7 +641,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
       if (guess.toLowerCase() === poi.name.toLowerCase()) {
         // ✅ Correct! — run the wheel animation landing on the winning POI.
         updateBalance(user.id, 1);
-        if (!isOwner) setCooldown(user.id);
+        setCooldown(user.id);
         const newPoi = newRandomPoi();
 
         // Notify any tracked leaderboard messages immediately so the new win
@@ -676,7 +676,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         // ❌ Wrong guess — run the wheel animation landing on the real POI,
         //    then reveal it with the wrong-guess message.
         const revealedPoi = poi;
-        if (!isOwner) setCooldown(user.id);
+        setCooldown(user.id);
         newRandomPoi();
 
         // Alert owner + secondary user: someone guessed wrong.
