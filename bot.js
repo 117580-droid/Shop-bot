@@ -490,9 +490,10 @@ const callbackServer = http.createServer((req, res) => {
         }
 
         // Calculate time in server (in minutes)
-        const joinedAt = member.joinedAt;
-        const now = new Date();
-        const minutesInServer = Math.floor((now - joinedAt) / (1000 * 60));
+        // Use joinedTimestamp which is in milliseconds since epoch
+        const joinedAtMs = member.joinedTimestamp;
+        const nowMs = Date.now();
+        const minutesInServer = Math.floor((nowMs - joinedAtMs) / (1000 * 60));
 
         // Calculate reward coins based on tiers
         const rewardCoins = calculateRewardCoins(minutesInServer);
