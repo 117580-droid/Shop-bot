@@ -416,6 +416,30 @@ const callbackServer = http.createServer((req, res) => {
     return;
   }
 
+
+  // Skip cooldown endpoint — removes the guess cooldown for a user
+  if (req.method === 'POST' && req.url === '/api/skip-cooldown') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { userId, username } = JSON.parse(body);
+        log('INFO', `callbackServer: skip-cooldown request — user: "${username}" (${userId})`);
+
+        // Remove the cooldown for this user from the game module
+        gameModule.userCooldowns.delete(userId);
+        log('INFO', `callbackServer: removed cooldown for ${username} (${userId})`);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, message: `Cooldown removed for ${username}` }));
+      } catch (err) {
+        logError('callbackServer: skip-cooldown error', err);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid request' }));
+      }
+    });
+    return;
+  }
   // Discord data endpoint — returns all servers the bot is in with their members
   if (req.method === 'GET' && req.url === '/api/discord-data') {
     (async () => {
