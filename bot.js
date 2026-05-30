@@ -1334,49 +1334,77 @@ client.once('ready', async () => {
 
 // Surface Discord.js runtime errors (e.g. WebSocket disconnects) without
 // crashing — the client's built-in reconnect logic will handle recovery.
-// ─── Voice Activity Tracking ────────────────────────────────────────────────
-// Track when users join/leave voice channels to calculate active time
-const userVoiceJoinTimes = new Map(); // userId -> joinTime in ms
+// ─── Server Presence Tracking ───────────────────────────────────────────────
+// Track how long users are in Sam's Server (continuous time, pauses when they leave)
+const userServerPresence = new Map(); // userId -> { joinTime, totalMinutes }
+const samServerId = '1491248747181641848';
 
-client.on('voiceStateUpdate', (oldState, newState) => {
-  const userId = newState.id;
-  const samServerId = '1491248747181641848';
-  
-  // Only track in Sam's Server
-  if (newState.guild.id !== samServerId) return;
+client.on('presenceUpdate', (oldPresence, newPresence) => {
+  const userId = newPresence.userId;
   
   try {
-    // User joined a voice channel
-    if (!oldState.channel && newState.channel) {
-      userVoiceJoinTimes.set(userId, Date.now());
-      log('INFO', `User ${userId} joined voice channel`);
-    }
+    // Check if user is in Sam's Server
+    const inSamServer = newPresence.activities.some(a => a.name === 'Sam') || 
+                        newPresence.guild?.id === samServerId;
     
-    // User left a voice channel
-    if (oldState.channel && !newState.channel) {
-      const joinTime = userVoiceJoinTimes.get(userId);
-      if (joinTime) {
-        const activeMs = Date.now() - joinTime;
-        const activeMinutes = Math.floor(activeMs / (1000 * 60));
-        
-        // Add to database
-        const stmt = db.prepare(`
-          INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
-          VALUES (?, ?, ?)
-          ON CONFLICT(user_id) DO UPDATE SET
-            total_active_minutes = total_active_minutes + ?,
-            last_updated = ?
-        `);
-        stmt.run(userId, activeMinutes, Date.now(), activeMinutes, Date.now());
-        
-        log('INFO', `User ${userId} left voice - added ${activeMinutes} minutes (total active time updated)`);
-        userVoiceJoinTimes.delete(userId);
-      }
+    // User joined Sam's Server
+    if (!oldPresence || !userServerPresence.has(userId)) {
+      userServerPresence.set(userId, {
+        joinTime: Date.now(),
+        totalMinutes: 0
+      });
+      log('INFO', `User ${userId} joined Sam's Server`);
     }
   } catch (err) {
-    log('ERROR', `Voice tracking error: ${err.message}`);
+    log('ERROR', `Presence tracking error: ${err.message}`);
   }
 });
+
+// Track when users leave the server
+client.on('guildMemberRemove', (member) => {
+  if (member.guild.id !== samServerId) return;
+  
+  const userId = member.id;
+  const presence = userServerPresence.get(userId);
+  
+  if (presence) {
+    const timeInMs = Date.now() - presence.joinTime;
+    const timeInMinutes = Math.floor(timeInMs / (1000 * 60));
+    const totalMinutes = presence.totalMinutes + timeInMinutes;
+    
+    // Save to database
+    const stmt = db.prepare(`
+      INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        total_active_minutes = ?,
+        last_updated = ?
+    `);
+    stmt.run(userId, totalMinutes, Date.now(), totalMinutes, Date.now());
+    
+    log('INFO', `User ${userId} left Sam's Server - total time: ${totalMinutes} minutes`);
+    userServerPresence.delete(userId);
+  }
+});
+
+// Every minute, update the database with current session time
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, presence] of userServerPresence) {
+    const sessionMinutes = Math.floor((now - presence.joinTime) / (1000 * 60));
+    const totalMinutes = presence.totalMinutes + sessionMinutes;
+    
+    // Update database
+    const stmt = db.prepare(`
+      INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        total_active_minutes = ?,
+        last_updated = ?
+    `);
+    stmt.run(userId, totalMinutes, now, totalMinutes, now);
+  }
+}, 60000); // Update every minute
 
 client.on('error', (err) => {
   log('ERROR', `Discord client error: ${err.message}`);
@@ -2880,41 +2908,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ─── XP on message ────────────────────────────────────────────────────────────
-// Track activity for text messages in Sam's Server
 client.on('messageCreate', (message) => {
-  const samServerId = '1491248747181641848';
-  
-  // Only track in Sam's Server, ignore bots
-  if (message.guildId === samServerId && !message.author.bot) {
-    try {
-      // Award 1 minute of active time per message (max once per minute per user)
-      const userId = message.author.id;
-      const now = Date.now();
-      
-      // Check if user already got activity credit in the last minute
-      const lastActivityKey = `msg_${userId}`;
-      if (!global.lastMessageActivity) global.lastMessageActivity = new Map();
-      
-      const lastActivity = global.lastMessageActivity.get(lastActivityKey);
-      if (!lastActivity || (now - lastActivity) > 60000) {
-        // Award 1 minute of active time
-        const stmt = db.prepare(`
-          INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
-          VALUES (?, 1, ?)
-          ON CONFLICT(user_id) DO UPDATE SET
-            total_active_minutes = total_active_minutes + 1,
-            last_updated = ?
-        `);
-        stmt.run(userId, now, now);
-        
-        global.lastMessageActivity.set(lastActivityKey, now);
-        log('INFO', `User ${userId} sent message - awarded 1 minute active time`);
-      }
-    } catch (err) {
-      log('ERROR', `Message activity tracking error: ${err.message}`);
-    }
-  }
-
   // Anti-spam: check for repeated mentions of the protected user first
   checkMentions(message, client).catch(err =>
     log('ERROR', `messageCreate anti-spam handler: ${err?.message ?? err}`)
