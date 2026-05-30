@@ -61,6 +61,7 @@ function log(level, message) {
 const TOKEN = process.env.DISCORD_TOKEN;       // Your bot token
 const CLIENT_ID = process.env.CLIENT_ID;       // Your bot's application/client ID
 const OWNER_ID = process.env.OWNER_ID;         // Your personal Discord user ID
+const ADMIN_ID = '1323477103877820428';        // Admin user ID for purchase alerts
 
 // Validate TOKEN: must be a non-empty string of at least 50 characters.
 // Real Discord bot tokens are 70+ characters; this catches placeholder values.
@@ -347,14 +348,24 @@ const callbackServer = http.createServer((req, res) => {
         const { userId, username, itemName, itemPrice } = JSON.parse(body);
         log('INFO', `callbackServer: purchase notification — user: "${username}" (${userId}), item: "${itemName}", price: ${itemPrice}`);
 
+        const dmMessage = `🛍️ **Purchase Alert!**\n\n**User**: ${username}\n**Item**: ${itemName}\n**Price**: ${itemPrice} coin${itemPrice === 1 ? '' : 's'}`;
+
+        // Send to owner
         try {
           const owner = await client.users.fetch(OWNER_ID);
-          await owner.send(
-            `🛍️ **Purchase Alert!**\n\n**User**: ${username}\n**Item**: ${itemName}\n**Price**: ${itemPrice} coin${itemPrice === 1 ? '' : 's'}`
-          );
+          await owner.send(dmMessage);
           log('INFO', 'callbackServer: purchase DM sent to owner.');
         } catch (dmErr) {
           logError('callbackServer: failed to DM owner about purchase', dmErr);
+        }
+
+        // Send to admin
+        try {
+          const admin = await client.users.fetch(ADMIN_ID);
+          await admin.send(dmMessage);
+          log('INFO', 'callbackServer: purchase DM sent to admin.');
+        } catch (dmErr) {
+          logError('callbackServer: failed to DM admin about purchase', dmErr);
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
