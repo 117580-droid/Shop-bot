@@ -1029,6 +1029,11 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('restartallplayerrewards')
+    .setDescription('Reset all player reward claims (Owner only)')
+    .setDMPermission(true),
+
+  new SlashCommandBuilder()
     .setName('website')
     .setDescription('Get the link to the Coin Shop Hub website'),
 ];
@@ -1889,6 +1894,43 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ── /website ──────────────────────────────────────────────────────────────
+    // ── /restartallplayerrewards ─────────────────────────────────────────
+    if (commandName === 'restartallplayerrewards') {
+      // Owner-only guard
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
+      try {
+        // Reset all player reward claims in the database
+        db.prepare('UPDATE user_balances SET reward_claimed = 0').run();
+        
+        log('INFO', `restartallplayerrewards: ${user.username} (${user.id}) reset all player reward claims. Coins earned from rewards are NOT reset.`);
+
+        return await safeReply(interaction, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('✅ Reward Claims Reset')
+              .setDescription('All players can now claim their rewards again!')
+              .addFields(
+                { name: 'Important', value: 'Coins earned from previous reward claims are **NOT reset** — they stay with the players.' }
+              )
+              .setTimestamp()
+          ]
+        });
+      } catch (err) {
+        logError('restartallplayerrewards', err);
+        return await safeReply(interaction, {
+          content: '❌ Failed to reset reward claims due to a database error.',
+          ephemeral: true
+        });
+      }
+    }
+
     if (commandName === 'website') {
       return await safeReply(interaction, {
         embeds: [
