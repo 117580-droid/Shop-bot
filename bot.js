@@ -490,10 +490,9 @@ const callbackServer = http.createServer((req, res) => {
           return;
         }
 
-        // Calculate time in server (in minutes)
-        const joinedAt = member.joinedAt;
-        const now = new Date();
-        const minutesInServer = Math.floor((now - joinedAt) / (1000 * 60));
+        // Get active time from database
+        const activityRow = db.prepare('SELECT total_active_minutes FROM user_activity WHERE user_id = ?').get(userId);
+        const minutesInServer = activityRow ? activityRow.total_active_minutes : 0;
 
         // Calculate reward coins based on tiers
         const rewardCoins = calculateRewardCoins(minutesInServer);
@@ -690,6 +689,13 @@ try {
 
 try {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS user_activity (
+      user_id TEXT PRIMARY KEY,
+      total_active_minutes INTEGER DEFAULT 0,
+      last_voice_join_time INTEGER,
+      last_updated INTEGER
+    );
+
     CREATE TABLE IF NOT EXISTS shop_items (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       name         TEXT    NOT NULL UNIQUE,
@@ -1328,6 +1334,50 @@ client.once('ready', async () => {
 
 // Surface Discord.js runtime errors (e.g. WebSocket disconnects) without
 // crashing — the client's built-in reconnect logic will handle recovery.
+// ─── Voice Activity Tracking ────────────────────────────────────────────────
+// Track when users join/leave voice channels to calculate active time
+const userVoiceJoinTimes = new Map(); // userId -> joinTime in ms
+
+client.on('voiceStateUpdate', (oldState, newState) => {
+  const userId = newState.id;
+  const samServerId = '1491248747181641848';
+  
+  // Only track in Sam's Server
+  if (newState.guild.id !== samServerId) return;
+  
+  try {
+    // User joined a voice channel
+    if (!oldState.channel && newState.channel) {
+      userVoiceJoinTimes.set(userId, Date.now());
+      log('INFO', `User ${userId} joined voice channel`);
+    }
+    
+    // User left a voice channel
+    if (oldState.channel && !newState.channel) {
+      const joinTime = userVoiceJoinTimes.get(userId);
+      if (joinTime) {
+        const activeMs = Date.now() - joinTime;
+        const activeMinutes = Math.floor(activeMs / (1000 * 60));
+        
+        // Add to database
+        const stmt = db.prepare(`
+          INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
+          VALUES (?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            total_active_minutes = total_active_minutes + ?,
+            last_updated = ?
+        `);
+        stmt.run(userId, activeMinutes, Date.now(), activeMinutes, Date.now());
+        
+        log('INFO', `User ${userId} left voice - added ${activeMinutes} minutes (total active time updated)`);
+        userVoiceJoinTimes.delete(userId);
+      }
+    }
+  } catch (err) {
+    log('ERROR', `Voice tracking error: ${err.message}`);
+  }
+});
+
 client.on('error', (err) => {
   log('ERROR', `Discord client error: ${err.message}`);
 });
