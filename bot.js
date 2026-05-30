@@ -490,9 +490,9 @@ const callbackServer = http.createServer((req, res) => {
         }
 
         // Calculate time in server (in minutes)
-        const joinedAt = member.joinedAt;
-        const now = new Date();
-        const minutesInServer = Math.floor((now - joinedAt) / (1000 * 60));
+        const joinedAtMs = member.joinedTimestamp;
+        const nowMs = Date.now();
+        const minutesInServer = Math.floor((nowMs - joinedAtMs) / (1000 * 60));
 
         // Calculate reward coins based on tiers
         const rewardCoins = calculateRewardCoins(minutesInServer);
@@ -1284,7 +1284,7 @@ client.once('ready', async () => {
   // interval fires slightly more than once around the boundary.
   let lastDailyHintCheck = null;
   setInterval(() => {
-    const now = new Date();
+    const nowMs = Date.now();
     const utcHour   = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
     const todayKey  = now.toISOString().slice(0, 10); // YYYY-MM-DD
