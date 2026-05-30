@@ -61,6 +61,7 @@ function log(level, message) {
 const TOKEN = process.env.DISCORD_TOKEN;       // Your bot token
 const CLIENT_ID = process.env.CLIENT_ID;       // Your bot's application/client ID
 const OWNER_ID = process.env.OWNER_ID;         // Your personal Discord user ID
+const SAM_SERVER_ID = '1491248747181641848';  // Sam's Server ID
 
 // Validate TOKEN: must be a non-empty string of at least 50 characters.
 // Real Discord bot tokens are 70+ characters; this catches placeholder values.
