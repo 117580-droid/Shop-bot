@@ -603,8 +603,8 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         embeds: [
           new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle('🎮 Where is foxyboy3?')
-            .setDescription(`**foxyboy3** is hiding somewhere on the Fortnite map!\n\nUse \`/guess <poi>\` to find them and win **🪙 1 coin**!\n\n*There are **${FORTNITE_POIS.length}** possible POIs across all chapters.*`)
+            .setTitle('🎮 Where is StrawhatMessi?')
+            .setDescription(`**StrawhatMessi** is hiding somewhere on the Fortnite map!\n\nUse \`/guess <poi>\` to find them and win **🪙 1 coin**!\n\n*There are **${FORTNITE_POIS.length}** possible POIs across all chapters.*`)
             .setFooter({ text: 'Wrong guesses give you a 1hr 30min cooldown!' })
             .setTimestamp()
         ]
@@ -670,7 +670,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
-                `🪙 1 coin **${user.username}** found Sam in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your coins!`
+                `🪙 1 coin **${user.username}** found Sam in **${poi.name}**\n\nDM <@1253458483240763434> (foxyboy3) or <@1347396372688797811> (StrawhatMessi) to claim your coins!`
               )
               .setFooter({ text: poi.name })
               .setTimestamp()
@@ -699,7 +699,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setColor(0xED4245)
               .setTitle('❌ Wrong Guess!')
               .setThumbnail(revealedPoi.image)
-              .setDescription(`**Sam** was hiding at **${revealedPoi.name}**`)
+              .setDescription(`**StrawhatMessi** was hiding at **${revealedPoi.name}**`)
               .setFooter({ text: revealedPoi.name })
               .setTimestamp()
           ],
