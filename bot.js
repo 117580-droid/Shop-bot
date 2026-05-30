@@ -1,4 +1,27 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+
+// Reward tiers: time in minutes -> coins earned
+const REWARD_TIERS = [
+  { minutes: 10, coins: 1 },
+  { minutes: 20, coins: 2 },
+  { minutes: 35, coins: 5 },
+  { minutes: 60, coins: 10 },
+  { minutes: 80, coins: 15 },
+  { minutes: 95, coins: 20 },
+];
+
+function calculateRewardCoins(minutesInServer) {
+  // Find the highest tier the user qualifies for
+  let totalCoins = 0;
+  for (const tier of REWARD_TIERS) {
+    if (minutesInServer >= tier.minutes) {
+      totalCoins = tier.coins;
+    } else {
+      break;
+    }
+  }
+  return totalCoins;
+}
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
@@ -441,6 +464,55 @@ const callbackServer = http.createServer((req, res) => {
     return;
   }
   // Discord data endpoint — returns all servers the bot is in with their members
+  // Get user's time in Sam's Server and calculate reward coins
+  if (req.method === 'GET' && req.url.startsWith('/api/rewards/')) {
+    const userId = req.url.split('/')[3];
+    if (!userId) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing userId' }));
+      return;
+    }
+
+    try {
+      const samServer = client.guilds.cache.get(SAM_SERVER_ID);
+      if (!samServer) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Sam Server not found' }));
+        return;
+      }
+
+      const member = await samServer.members.fetch(userId).catch(() => null);
+      if (!member) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'User not in Sam Server' }));
+        return;
+      }
+
+      // Calculate time in server (in minutes)
+      const joinedAt = member.joinedAt;
+      const now = new Date();
+      const minutesInServer = Math.floor((now - joinedAt) / (1000 * 60));
+
+      // Calculate reward coins based on tiers
+      const rewardCoins = calculateRewardCoins(minutesInServer);
+
+      log('INFO', `callbackServer: rewards for ${userId} - ${minutesInServer} minutes in server = ${rewardCoins} coins`);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        userId,
+        minutesInServer,
+        rewardCoins,
+        tiers: REWARD_TIERS
+      }));
+    } catch (err) {
+      logError('callbackServer: rewards error', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   if (req.method === 'GET' && req.url === '/api/discord-data') {
     (async () => {
     try {
