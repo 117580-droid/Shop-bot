@@ -699,7 +699,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setColor(0xED4245)
               .setTitle('❌ Wrong Guess!')
               .setThumbnail(revealedPoi.image)
-              .setDescription(`**Sam** was hiding at **${revealedPoi.name}**`)
+              .setDescription(`**Messi** was hiding at **${revealedPoi.name}**`)
               .setFooter({ text: revealedPoi.name })
               .setTimestamp()
           ],
