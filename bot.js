@@ -348,7 +348,7 @@ const callbackServer = http.createServer((req, res) => {
         const { userId, username, itemName, itemPrice } = JSON.parse(body);
         log('INFO', `callbackServer: purchase notification — user: "${username}" (${userId}), item: "${itemName}", price: ${itemPrice}`);
 
-        const dmMessage = `🛍️ **Purchase Alert!**\n\n**User**: ${username}\n**Item**: ${itemName}\n**Price**: ${itemPrice} coin${itemPrice === 1 ? '' : 's'}`;
+        const dmMessage = `🛍️ **Purchase Alert!**\n\n<@${OWNER_ID}> <@${ADMIN_ID}>\n\n**User**: ${username}\n**Item**: ${itemName}\n**Price**: ${itemPrice} coin${itemPrice === 1 ? '' : 's'}`;
 
         // Send to owner
         try {
