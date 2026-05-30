@@ -180,7 +180,7 @@ function logError(context, err) {
 // Sends an identical embed DM to both the owner and the secondary alert user.
 // Errors for either recipient are caught independently so one failure doesn't
 // prevent the other from receiving the message.
-const ALERT_USER_ID = '1417947408691757226';
+const ALERT_USER_IDS = ['1417947408691757226', '1323477103877820428'];
 
 async function alertBothUsers(client, title, description, color) {
   const OWNER_ID = process.env.OWNER_ID;
@@ -199,11 +199,14 @@ async function alertBothUsers(client, title, description, color) {
     }
   }
 
-  try {
-    const alertUser = await client.users.fetch(ALERT_USER_ID);
-    await alertUser.send({ embeds: [embed] });
-  } catch (err) {
-    logError(`alertBothUsers: DM alert user ${ALERT_USER_ID}`, err);
+  // Alert all users in ALERT_USER_IDS
+  for (const userId of ALERT_USER_IDS) {
+    try {
+      const alertUser = await client.users.fetch(userId);
+      await alertUser.send({ embeds: [embed] });
+    } catch (err) {
+      logError(`alertBothUsers: DM alert user ${userId}`, err);
+    }
   }
 }
 
@@ -670,7 +673,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
-                `🪙 1 coin **${user.username}** found Sam in **${poi.name}**\n\nDM <@1253458483240763434> (foxyboy3) or <@1347396372688797811> (StrawhatMessi) to claim your coins!`
+                `🪙 1 coin **${user.username}** found StrawhatMessi in **${poi.name}**\n\nDM <@1253458483240763434> (foxyboy3) or <@1347396372688797811> (StrawhatMessi) to claim your coins!`
               )
               .setFooter({ text: poi.name })
               .setTimestamp()
