@@ -697,7 +697,7 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // Game commands
     if (gameCommands.some(cmd => cmd.name === commandName)) {
-      return await handleGame(interaction, db, gameModule);
+      return await handleGame(interaction, db, client, null);
     }
 
     // Clan commands
