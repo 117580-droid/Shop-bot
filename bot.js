@@ -2880,7 +2880,41 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ─── XP on message ────────────────────────────────────────────────────────────
+// Track activity for text messages in Sam's Server
 client.on('messageCreate', (message) => {
+  const samServerId = '1491248747181641848';
+  
+  // Only track in Sam's Server, ignore bots
+  if (message.guildId === samServerId && !message.author.bot) {
+    try {
+      // Award 1 minute of active time per message (max once per minute per user)
+      const userId = message.author.id;
+      const now = Date.now();
+      
+      // Check if user already got activity credit in the last minute
+      const lastActivityKey = `msg_${userId}`;
+      if (!global.lastMessageActivity) global.lastMessageActivity = new Map();
+      
+      const lastActivity = global.lastMessageActivity.get(lastActivityKey);
+      if (!lastActivity || (now - lastActivity) > 60000) {
+        // Award 1 minute of active time
+        const stmt = db.prepare(`
+          INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
+          VALUES (?, 1, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            total_active_minutes = total_active_minutes + 1,
+            last_updated = ?
+        `);
+        stmt.run(userId, now, now);
+        
+        global.lastMessageActivity.set(lastActivityKey, now);
+        log('INFO', `User ${userId} sent message - awarded 1 minute active time`);
+      }
+    } catch (err) {
+      log('ERROR', `Message activity tracking error: ${err.message}`);
+    }
+  }
+
   // Anti-spam: check for repeated mentions of the protected user first
   checkMentions(message, client).catch(err =>
     log('ERROR', `messageCreate anti-spam handler: ${err?.message ?? err}`)
