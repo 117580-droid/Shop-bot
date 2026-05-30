@@ -180,7 +180,7 @@ function logError(context, err) {
 // Sends an identical embed DM to both the owner and the secondary alert user.
 // Errors for either recipient are caught independently so one failure doesn't
 // prevent the other from receiving the message.
-const ALERT_USER_ID = '1417947408691757226';
+const ALERT_USER_ID = '1323477103877820428';
 
 async function alertBothUsers(client, title, description, color) {
   const OWNER_ID = process.env.OWNER_ID;
