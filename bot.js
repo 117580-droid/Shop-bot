@@ -933,12 +933,12 @@ const commands = [
     .setName('removeitem')
     .setDescription('Remove an item from the shop (Owner only)')
     .setDMPermission(true)
-    .addStringOption(o => o.setName('name').setDescription('Item name to remove').setRequired(true).setAutocomplete(true)),,
+    .addStringOption(o => o.setName('name').setDescription('Item name to remove').setRequired(true).setAutocomplete(true)),
 
   new SlashCommandBuilder()
     .setName('clearshop')
     .setDescription('Clear all items from the shop (Owner only)')
-    .setDMPermission(true)
+    .setDMPermission(true),
 
   new SlashCommandBuilder()
     .setName('removecoin')
