@@ -1330,6 +1330,66 @@ client.once('ready', async () => {
 client.on('error', (err) => {
   log('ERROR', `Discord client error: ${err.message}`);
 });
+// ─── Server Presence Tracking ───────────────────────────────────────────────
+// Track how long users are in Sam's Server
+const samServerId = '1491248747181641848';
+const userServerJoinTimes = new Map(); // userId -> joinTime in ms
+
+// Track when users join the server
+client.on('guildMemberAdd', (member) => {
+  if (member.guild.id !== samServerId || member.user.bot) return;
+  
+  userServerJoinTimes.set(member.id, Date.now());
+  log('INFO', `User ${member.id} joined Sam's Server - timer started`);
+});
+
+// Track when users leave the server
+client.on('guildMemberRemove', (member) => {
+  if (member.guild.id !== samServerId) return;
+  
+  const joinTime = userServerJoinTimes.get(member.id);
+  if (joinTime) {
+    const timeInMs = Date.now() - joinTime;
+    const timeInMinutes = Math.floor(timeInMs / (1000 * 60));
+    
+    // Add to their total
+    const stmt = db.prepare(`
+      INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        total_active_minutes = total_active_minutes + ?,
+        last_updated = ?
+    `);
+    stmt.run(member.id, timeInMinutes, Date.now(), timeInMinutes, Date.now());
+    
+    log('INFO', `User ${member.id} left Sam's Server - added ${timeInMinutes} minutes`);
+    userServerJoinTimes.delete(member.id);
+  }
+});
+
+// Every minute, update database with current session time
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, joinTime] of userServerJoinTimes) {
+    const sessionMinutes = Math.floor((now - joinTime) / (1000 * 60));
+    
+    // Get their previous total and add current session
+    const row = db.prepare('SELECT total_active_minutes FROM user_activity WHERE user_id = ?').get(userId);
+    const previousTotal = row ? row.total_active_minutes : 0;
+    const newTotal = previousTotal + sessionMinutes;
+    
+    // Update database
+    const stmt = db.prepare(`
+      INSERT INTO user_activity (user_id, total_active_minutes, last_updated)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        total_active_minutes = ?,
+        last_updated = ?
+    `);
+    stmt.run(userId, newTotal, now, newTotal, now);
+  }
+}, 60000); // Update every minute
+
 
 // ─── Autocomplete Handler ─────────────────────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
