@@ -30,6 +30,7 @@ const { commands: clanCommands, handleClan, handleXp, initClanTables } = require
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
+const { commands: moderationCommands, handleModeration } = require('./moderation.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
@@ -672,6 +673,7 @@ client.once('ready', () => {
     ...gameCommands,
     ...clanCommands,
     ...lotteryCommands,
+    ...moderationCommands,
     ...giveawayCommands,
   ];
 
@@ -713,6 +715,10 @@ client.on('interactionCreate', async (interaction) => {
     // Giveaway commands
     if (giveawayCommands.some(cmd => cmd.name === commandName)) {
       return await handleGiveaway(interaction, db);
+    // Moderation commands
+    if (moderationCommands.some(cmd => cmd.name === commandName)) {
+      return await handleModeration(interaction);
+    }
     }
   } catch (err) {
     logError(`Error handling command ${commandName}`, err);
