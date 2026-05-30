@@ -933,7 +933,12 @@ const commands = [
     .setName('removeitem')
     .setDescription('Remove an item from the shop (Owner only)')
     .setDMPermission(true)
-    .addStringOption(o => o.setName('name').setDescription('Item name to remove').setRequired(true).setAutocomplete(true)),
+    .addStringOption(o => o.setName('name').setDescription('Item name to remove').setRequired(true).setAutocomplete(true)),,
+
+  new SlashCommandBuilder()
+    .setName('clearshop')
+    .setDescription('Clear all items from the shop (Owner only)')
+    .setDMPermission(true)
 
   new SlashCommandBuilder()
     .setName('removecoin')
@@ -1722,6 +1727,39 @@ client.on('interactionCreate', async (interaction) => {
             .setTimestamp()
         ]
       });
+    }
+
+
+    // ── /clearshop ───────────────────────────────────────────────────────────
+    // Owner-only command to delete ALL shop items from the database
+    if (commandName === 'clearshop') {
+      // Owner-only guard
+      if (!OWNER_ID || user.id !== OWNER_ID) {
+        return await safeReply(interaction, {
+          content: '❌ Only the bot owner can use this command.',
+          ephemeral: true,
+        });
+      }
+
+      try {
+        const count = db.prepare('SELECT COUNT(*) as count FROM shop_items').get().count;
+        db.prepare('DELETE FROM shop_items').run();
+        log('INFO', `clearshop: owner ${user.username} (${user.id}) deleted all ${count} shop items.`);
+        
+        return await safeReply(interaction, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xED4245)
+              .setTitle('🗑️ Shop Cleared')
+              .setDescription(`Deleted **${count}** items from the shop.`)
+              .setFooter({ text: `Cleared by ${user.username}` })
+              .setTimestamp()
+          ]
+        });
+      } catch (err) {
+        logError('clearshop DB delete', err);
+        return await safeReply(interaction, { content: '❌ Failed to clear shop due to a database error.', ephemeral: true });
+      }
     }
 
     // ── /removecoin ───────────────────────────────────────────────────────────
