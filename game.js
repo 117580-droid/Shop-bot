@@ -634,6 +634,12 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         return await safeReply(interaction, { content: '❌ Your guess cannot be empty.', ephemeral: true });
       }
 
+      // Validate that the guess is a real POI name
+      const validPois = FORTNITE_POIS.map(p => p.name.toLowerCase());
+      if (!validPois.includes(guess.toLowerCase())) {
+        return await safeReply(interaction, { content: `❌ **${guess}** is not a valid POI name. Please guess a real Fortnite location.`, ephemeral: true });
+      }
+
       // Defer the reply so we can edit it multiple times during the animation.
       // All subsequent responses must use editReply / followUp.
       await interaction.deferReply();
