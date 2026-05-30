@@ -1,5 +1,3 @@
-require('./server'); // Start web server
-
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 // Reward tiers: time in minutes -> coins earned
