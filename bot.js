@@ -473,43 +473,45 @@ const callbackServer = http.createServer((req, res) => {
       return;
     }
 
-    try {
-      const samServer = client.guilds.cache.get(SAM_SERVER_ID);
-      if (!samServer) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Sam Server not found' }));
-        return;
+    (async () => {
+      try {
+        const samServer = client.guilds.cache.get(SAM_SERVER_ID);
+        if (!samServer) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Sam Server not found' }));
+          return;
+        }
+
+        const member = await samServer.members.fetch(userId).catch(() => null);
+        if (!member) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'User not in Sam Server' }));
+          return;
+        }
+
+        // Calculate time in server (in minutes)
+        const joinedAt = member.joinedAt;
+        const now = new Date();
+        const minutesInServer = Math.floor((now - joinedAt) / (1000 * 60));
+
+        // Calculate reward coins based on tiers
+        const rewardCoins = calculateRewardCoins(minutesInServer);
+
+        log('INFO', `callbackServer: rewards for ${userId} - ${minutesInServer} minutes in server = ${rewardCoins} coins`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          userId,
+          minutesInServer,
+          rewardCoins,
+          tiers: REWARD_TIERS
+        }));
+      } catch (err) {
+        logError('callbackServer: rewards error', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
       }
-
-      const member = await samServer.members.fetch(userId).catch(() => null);
-      if (!member) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'User not in Sam Server' }));
-        return;
-      }
-
-      // Calculate time in server (in minutes)
-      const joinedAt = member.joinedAt;
-      const now = new Date();
-      const minutesInServer = Math.floor((now - joinedAt) / (1000 * 60));
-
-      // Calculate reward coins based on tiers
-      const rewardCoins = calculateRewardCoins(minutesInServer);
-
-      log('INFO', `callbackServer: rewards for ${userId} - ${minutesInServer} minutes in server = ${rewardCoins} coins`);
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        userId,
-        minutesInServer,
-        rewardCoins,
-        tiers: REWARD_TIERS
-      }));
-    } catch (err) {
-      logError('callbackServer: rewards error', err);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
+    })();
     return;
   }
 
