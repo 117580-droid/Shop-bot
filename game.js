@@ -657,8 +657,8 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         // Alert owner + secondary user: someone found them — new hiding spot revealed.
         await alertBothUsers(
           client,
-          '🎯 Someone Found Sam!',
-          `**${user.username}** (<@${user.id}>) found Sam at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
+          '🎯 Someone Found Messi!',
+          `**${user.username}** (<@${user.id}>) found Messi at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
           0x57F287,
         );
 
@@ -670,7 +670,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
-                `🪙 1 coin **${user.username}** found Sam in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your coins!`
+                `🪙 1 coin **${user.username}** found Messi in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your coins!`
               )
               .setFooter({ text: poi.name })
               .setTimestamp()
@@ -688,7 +688,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         await alertBothUsers(
           client,
           '❌ Wrong Guess!',
-          `**${user.username}** (<@${user.id}>) guessed **${guess}** but Sam was at **${revealedPoi.name}**.\nNew hiding spot: **${currentPoi.name}**`,
+          `**${user.username}** (<@${user.id}>) guessed **${guess}** but Messi was at **${revealedPoi.name}**.\nNew hiding spot: **${currentPoi.name}**`,
           0xED4245,
         );
 
@@ -1052,7 +1052,7 @@ async function checkCooldowns(client) {
             .setColor(0x57F287)
             .setTitle('⏰ Your MadGuessr cooldown has now expired')
             .setDescription(
-              "Your cooldown has expired! Go back and use `/guess` to try and find Sam 🎯"
+              "Your cooldown has expired! Go back and use `/guess` to try and find Messi 🎯"
             )
             .setTimestamp()
         ]
