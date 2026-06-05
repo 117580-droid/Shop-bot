@@ -1,26 +1,26 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
-// Reward tiers: time in minutes -> coins earned
+// Reward tiers: time in minutes -> points earned
 const REWARD_TIERS = [
-  { minutes: 10, coins: 1 },
-  { minutes: 20, coins: 2 },
-  { minutes: 35, coins: 5 },
-  { minutes: 60, coins: 10 },
-  { minutes: 80, coins: 15 },
-  { minutes: 95, coins: 20 },
+  { minutes: 10, points: 1 },
+  { minutes: 20, points: 2 },
+  { minutes: 35, points: 5 },
+  { minutes: 60, points: 10 },
+  { minutes: 80, points: 15 },
+  { minutes: 95, points: 20 },
 ];
 
-function calculateRewardCoins(minutesInServer) {
+function calculateRewardPoints(minutesInServer) {
   // Find the highest tier the user qualifies for
-  let totalCoins = 0;
+  let totalPoints = 0;
   for (const tier of REWARD_TIERS) {
     if (minutesInServer >= tier.minutes) {
-      totalCoins = tier.coins;
+      totalPoints = tier.points;
     } else {
       break;
     }
   }
-  return totalCoins;
+  return totalPoints;
 }
 const Database = require('better-sqlite3');
 const fs = require('fs');
@@ -171,9 +171,10 @@ async function sendWebhook(participants, discordClient) {
  * Send a synchronisation event to the coin-shop website.
  *
  * Supported actions:
- *   'add'         — credit coins to a user   (payload: { userId, amount })
- *   'add_item'    — add a shop item           (payload: { id, name, price, description })
- *   'remove_item' — remove a shop item        (payload: { id })
+ *   'add'            — credit points to a user  (payload: { userId, amount })
+ *   'update_points'  — set a user's points       (payload: { userId, username, points })
+ *   'add_item'       — add a shop item           (payload: { id, name, price, description })
+ *   'remove_item'    — remove a shop item        (payload: { id })
  *
  * The webhook URL is always https://coin-shop-hub-production.up.railway.app/api/webhook/coins.
  * Authentication uses two headers:
@@ -494,16 +495,16 @@ const callbackServer = http.createServer((req, res) => {
         const now = new Date();
         const minutesInServer = Math.floor((now - joinedAt) / (1000 * 60));
 
-        // Calculate reward coins based on tiers
-        const rewardCoins = calculateRewardCoins(minutesInServer);
+        // Calculate reward points based on tiers
+        const rewardPoints = calculateRewardPoints(minutesInServer);
 
-        log('INFO', `callbackServer: rewards for ${userId} - ${minutesInServer} minutes in server = ${rewardCoins} coins`);
+        log('INFO', `callbackServer: rewards for ${userId} - ${minutesInServer} minutes in server = ${rewardPoints} points`);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           userId,
           minutesInServer,
-          rewardCoins,
+          rewardPoints,
           tiers: REWARD_TIERS
         }));
       } catch (err) {
@@ -611,7 +612,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY,
     username TEXT,
-    coins INTEGER DEFAULT 0,
+    points INTEGER DEFAULT 0,
     last_daily_claim TEXT
   );
 
@@ -655,6 +656,166 @@ initLotteryTable(db);
 
 const gameModule = { userCooldowns: new Map() };
 
+// ─── Points Commands ──────────────────────────────────────────────────────────
+
+const pointsCommands = [
+  new SlashCommandBuilder()
+    .setName('givepoints')
+    .setDescription('Give points to a user (Admin only)')
+    .addUserOption(o => o.setName('user').setDescription('The user to give points to').setRequired(true))
+    .addIntegerOption(o => o.setName('amount').setDescription('Number of points to give').setRequired(true).setMinValue(1))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('removepoints')
+    .setDescription('Remove points from a user (Admin only)')
+    .addUserOption(o => o.setName('user').setDescription('The user to remove points from').setRequired(true))
+    .addIntegerOption(o => o.setName('amount').setDescription('Number of points to remove').setRequired(true).setMinValue(1))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('points')
+    .setDescription('Check your current points balance')
+    .addUserOption(o => o.setName('user').setDescription('User to check points for (defaults to yourself)').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('leaderboard')
+    .setDescription('View the points leaderboard'),
+].map(cmd => cmd.toJSON());
+
+/**
+ * Upsert a user's points in the local DB and sync to the coin-shop website.
+ *
+ * @param {string} userId      Discord user ID
+ * @param {string} username    Discord username
+ * @param {number} delta       Points to add (positive) or remove (negative)
+ * @returns {number}           The new points total
+ */
+function updateUserPoints(userId, username, delta) {
+  // Upsert the user row, then apply the delta (clamped to 0 minimum).
+  db.prepare(`
+    INSERT INTO users (user_id, username, points)
+    VALUES (?, ?, 0)
+    ON CONFLICT(user_id) DO UPDATE SET username = excluded.username
+  `).run(userId, username);
+
+  db.prepare(`
+    UPDATE users SET points = MAX(0, points + ?) WHERE user_id = ?
+  `).run(delta, userId);
+
+  const row = db.prepare('SELECT points FROM users WHERE user_id = ?').get(userId);
+  return row ? row.points : 0;
+}
+
+/**
+ * Handle /givepoints, /removepoints, /points, and /leaderboard commands.
+ */
+async function handlePointsCommand(interaction) {
+  const { commandName, user } = interaction;
+  const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
+  const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+
+  if (commandName === 'givepoints') {
+    if (!isOwner && !isAdmin) {
+      return await safeReply(interaction, { content: '❌ You do not have permission to use this command.', ephemeral: true });
+    }
+
+    const target = interaction.options.getUser('user');
+    const amount = interaction.options.getInteger('amount');
+
+    const newPoints = updateUserPoints(target.id, target.username, amount);
+
+    // Sync to coin-shop website
+    await sendCoinShopWebhook({
+      action:   'update_points',
+      userId:   target.id,
+      username: target.username,
+      points:   newPoints,
+    });
+
+    return await safeReply(interaction, {
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('✅ Points Given')
+          .setDescription(`Gave **${amount} point${amount !== 1 ? 's' : ''}** to **${target.username}**.`)
+          .addFields(
+            { name: '👤 User',       value: `<@${target.id}>`, inline: true },
+            { name: '➕ Given',      value: `${amount}`,        inline: true },
+            { name: '💰 New Total', value: `${newPoints}`,     inline: true },
+          )
+          .setFooter({ text: `Updated by ${user.username}` })
+          .setTimestamp(),
+      ],
+    });
+  }
+
+  if (commandName === 'removepoints') {
+    if (!isOwner && !isAdmin) {
+      return await safeReply(interaction, { content: '❌ You do not have permission to use this command.', ephemeral: true });
+    }
+
+    const target = interaction.options.getUser('user');
+    const amount = interaction.options.getInteger('amount');
+
+    const newPoints = updateUserPoints(target.id, target.username, -amount);
+
+    // Sync to coin-shop website
+    await sendCoinShopWebhook({
+      action:   'update_points',
+      userId:   target.id,
+      username: target.username,
+      points:   newPoints,
+    });
+
+    return await safeReply(interaction, {
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xED4245)
+          .setTitle('✅ Points Removed')
+          .setDescription(`Removed **${amount} point${amount !== 1 ? 's' : ''}** from **${target.username}**.`)
+          .addFields(
+            { name: '👤 User',       value: `<@${target.id}>`, inline: true },
+            { name: '➖ Removed',    value: `${amount}`,        inline: true },
+            { name: '💰 New Total', value: `${newPoints}`,     inline: true },
+          )
+          .setFooter({ text: `Updated by ${user.username}` })
+          .setTimestamp(),
+      ],
+    });
+  }
+
+  if (commandName === 'points') {
+    const target = interaction.options.getUser('user') ?? user;
+    const row = db.prepare('SELECT points FROM users WHERE user_id = ?').get(target.id);
+    const pts = row ? row.points : 0;
+
+    return await safeReply(interaction, {
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle('💰 Points Balance')
+          .setDescription(`**${target.username}** has **${pts} point${pts !== 1 ? 's' : ''}**.`)
+          .setTimestamp(),
+      ],
+      ephemeral: true,
+    });
+  }
+
+  if (commandName === 'leaderboard') {
+    // Return an empty leaderboard — no users appear by default.
+    return await safeReply(interaction, {
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle('🏆 Points Leaderboard')
+          .setDescription('No one is on the leaderboard yet. Points are awarded by admins via `/givepoints`.')
+          .setTimestamp(),
+      ],
+    });
+  }
+}
+
 // ─── Client Events ────────────────────────────────────────────────────────────
 
 client.once('ready', () => {
@@ -673,6 +834,7 @@ client.once('ready', () => {
     ...clanCommands,
     ...lotteryCommands,
     ...giveawayCommands,
+    ...pointsCommands,
   ];
 
   (async () => {
@@ -713,6 +875,11 @@ client.on('interactionCreate', async (interaction) => {
     // Giveaway commands
     if (giveawayCommands.some(cmd => cmd.name === commandName)) {
       return await handleGiveaway(interaction, db);
+    }
+
+    // Points commands
+    if (pointsCommands.some(cmd => cmd.name === commandName)) {
+      return await handlePointsCommand(interaction);
     }
   } catch (err) {
     logError(`Error handling command ${commandName}`, err);
