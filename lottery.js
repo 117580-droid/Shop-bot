@@ -368,7 +368,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
       winnerDisplayName  = nameMap.get(winnerId) ?? `<@${winnerId}>`;
     }
 
-    // Award 50 coins to the winner.
+    // Award 50 points to the winner.
     updateBalance(winnerId, 50);
 
     const winnerTag = `${winnerDisplayName} (<@${winnerId}>)`;
@@ -420,7 +420,7 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         `🏆 Congratulations to **${winnerTag}** for winning the **50 WIN LOTTERY**!`
       )
       .addFields(
-        { name: '🪙 Prize',           value: '50 coins',             inline: true },
+        { name: '🪙 Prize',           value: '50 points',            inline: true },
         { name: '🎟️ Winning Ticket',  value: `1 of ${totalTickets}`, inline: true },
       )
       .setTimestamp();
@@ -456,14 +456,14 @@ async function handleLottery(interaction, db, client, updateBalance, targetGuild
         .setTitle('🎉 You Won the Lottery!')
         .setDescription(
           `Congratulations! You were picked as the winner of the **50 WIN LOTTERY** wheel!\n\n` +
-          `**🪙 50 coins** have been added to your balance.`
+          `**🪙 50 points** have been added to your balance.`
         )
         .setTimestamp();
 
       await winnerUser.send({ embeds: [dmEmbed] });
     } catch (err) {
       logError('handleLottery: DM winner', err);
-      // Non-fatal — coins were still awarded and result posted publicly.
+      // Non-fatal — points were still awarded and result posted publicly.
     }
 
     // ── Clear current round from DB ───────────────────────────────────────────
