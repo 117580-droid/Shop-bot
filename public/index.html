@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messi's Point Hub</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>Messi's Point Hub</h1>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="profile">Profile</button>
+      <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
+      <button class="tab-btn" data-tab="shop">Shop</button>
+      <button class="tab-btn" data-tab="signin">Sign In</button>
+    </nav>
+
+    <!-- Tab Content -->
+    <main class="tab-content">
+      <!-- Profile Tab -->
+      <section id="profile" class="tab-pane active">
+        <div class="profile-container">
+          <div id="profile-content" class="profile-content">
+            <!-- Will be populated by JavaScript -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Leaderboard Tab -->
+      <section id="leaderboard" class="tab-pane">
+        <div class="leaderboard-container">
+          <h2>Leaderboard</h2>
+          <div id="leaderboard-list" class="leaderboard-list">
+            <!-- Will be populated by JavaScript -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Shop Tab -->
+      <section id="shop" class="tab-pane">
+        <div class="shop-container">
+          <h2>Shop</h2>
+          <div id="shop-items" class="shop-items">
+            <!-- Will be populated by JavaScript -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Sign In Tab -->
+      <section id="signin" class="tab-pane">
+        <div class="signin-container">
+          <h2>Sign In</h2>
+          <button id="discord-login" class="discord-btn">Sign in with Discord</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
+

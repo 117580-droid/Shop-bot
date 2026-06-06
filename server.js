@@ -60,3 +60,4 @@ app.get('/api/balance/:userId', (req, res) => {
 app.listen(PORT, () => console.log(`🌐 Website running on port ${PORT}`));
 
 module.exports = app;
+
