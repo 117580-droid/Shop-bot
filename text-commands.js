@@ -237,13 +237,47 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     }
 
     // ── !shop ──────────────────────────────────────────────────────────────────
+    // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          price INTEGER NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const items = db.prepare('SELECT id, name, price FROM shop_items ORDER BY name ASC').all();
+
+      if (!items.length) {
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x5865F2)
+              .setTitle('🛍️ Shop')
+              .setDescription('Shop is empty. No items for sale right now!')
+              .setTimestamp(),
+          ],
+        });
+      }
+
+      const itemLines = items.map(item => `**${item.name}** - 💎 ${item.price} gems`);
+
       return await safeReply(message, {
         embeds: [
           new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle('🛍️ Shop')
-            .setDescription('Shop is not yet configured. Check back later!')
+            .setTitle('🛍️ Shop Items')
+            .setDescription(itemLines.join('\n'))
+            .addFields(
+              {
+                name: '💡 How to Buy',
+                value: 'Use the item name and ask an admin to purchase it for you!',
+                inline: false,
+              }
+            )
+            .setFooter({ text: `${items.length} item${items.length !== 1 ? 's' : ''} available` })
             .setTimestamp(),
         ],
       });
