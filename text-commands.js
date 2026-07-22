@@ -112,7 +112,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     }
 
     // ── !gems ──────────────────────────────────────────────────────────────────
-    if (command === 'gems') {
+    if (command === 'bank') {
       const target = message.mentions.users.first() ?? message.author;
       const row = db.prepare('SELECT gems FROM user_xp WHERE user_id = ?').get(target.id);
       const gems = row ? row.gems : 0;
@@ -343,7 +343,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     }
 
     // ── !help ──────────────────────────────────────────────────────────────────
-    if (command === 'buy') {
+    if (command === 'redeem') {
       return await safeReply(message, {
         embeds: [
           new EmbedBuilder()
@@ -388,7 +388,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '💰 Economy Commands',
-                value: '`!gems [@user]` - Check your or another player\'s gem balance\n`!shop` - Open the shop to buy items\n`!addgem @user <amount>` - Add gems to a user\n`!removegem @user <amount>` - Remove gems from a user',
+                value: '`!bank [@user]` - Check your or another player\'s gem balance\n`!shop` - Open the shop to buy items\n`!addgem @user <amount>` - Add gems to a user\n`!removegem @user <amount>` - Remove gems from a user',
                 inline: false,
               },
               {
@@ -403,7 +403,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '🎰 Other Commands',
-                value: '`!buy` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
+                value: '`!redeem` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
                 inline: false,
               }
             )
