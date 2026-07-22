@@ -343,6 +343,36 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     }
 
     // ── !help ──────────────────────────────────────────────────────────────────
+    if (command === 'buy') {
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🎟️ Lottery Tickets')
+            .setDescription('Buy lottery tickets to enter the **50 WIN LOTTERY** wheel draw!')
+            .addFields(
+              {
+                name: '🎰 How It Works',
+                value: 'Each ticket costs **50 gems**. Buy as many as you want for better odds!',
+                inline: false,
+              },
+              {
+                name: '🏆 Prize',
+                value: 'Win **1,000 gems** when your ticket is drawn!',
+                inline: false,
+              },
+              {
+                name: '📝 How to Buy',
+                value: 'Use `/buy <amount>` to purchase lottery tickets\nExample: `/buy 5` = 5 tickets for 250 gems',
+                inline: false,
+              },
+            )
+            .setFooter({ text: 'Use /buy <amount> to purchase tickets' })
+            .setTimestamp(),
+        ],
+      });
+    }
+
     if (command === 'help') {
       return await safeReply(message, {
         embeds: [
@@ -373,7 +403,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '🎰 Other Commands',
-                value: '`/buy` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
+                value: '`!buy` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
                 inline: false,
               }
             )
