@@ -7,9 +7,9 @@ const OWNER_ID = '123456789012345678'; // ← replace with your Discord user ID
 // ─── Constants ────────────────────────────────────────────────────────────────
 const INVITE_COOLDOWN_MS  = 10.5 * 60 * 60 * 1000; // 10.5 hours
 const DELETE_COOLDOWN_MS  = 7   * 24 * 60 * 60 * 1000; // 1 week
-const XP_COOLDOWN_MS      = 60  * 1000;              // 60 seconds
-const XP_MIN              = 1;
-const XP_MAX              = 5;
+const XP_PER_MESSAGE      = 2;                       // XP gained per message
+const XP_PER_LEVEL        = 100;                      // XP required to level up
+const GEMS_PER_LEVEL      = 1;                        // Gems awarded per level (always 1)
 
 // ─── Clan role colour palette ─────────────────────────────────────────────────
 // Silver and a full rainbow spectrum so every clan role looks distinctive.
@@ -91,11 +91,12 @@ function initClanTables(db) {
       PRIMARY KEY (user_id, cooldown_type)
     );
 
-    CREATE TABLE IF NOT EXISTS xp_cooldowns (
-      user_id     TEXT    NOT NULL,
-      clan_id     INTEGER NOT NULL,
-      last_xp_time INTEGER NOT NULL,
-      PRIMARY KEY (user_id, clan_id)
+    CREATE TABLE IF NOT EXISTS user_xp (
+      user_id      TEXT    NOT NULL PRIMARY KEY,
+      lifetime_xp  INTEGER NOT NULL DEFAULT 0,
+      current_xp   INTEGER NOT NULL DEFAULT 0,
+      level        INTEGER NOT NULL DEFAULT 0,
+      gems         INTEGER NOT NULL DEFAULT 0
     );
   `);
 }
@@ -145,25 +146,59 @@ function clearCooldown(db, userId, type) {
   db.prepare('DELETE FROM clan_cooldowns WHERE user_id = ? AND cooldown_type = ?').run(userId, type);
 }
 
-function getXpCooldownRemaining(db, userId, clanId) {
-  const row = db.prepare(
-    'SELECT last_xp_time FROM xp_cooldowns WHERE user_id = ? AND clan_id = ?'
-  ).get(userId, clanId);
-  if (!row) return 0;
-  const elapsed = Date.now() - row.last_xp_time;
-  return elapsed >= XP_COOLDOWN_MS ? 0 : XP_COOLDOWN_MS - elapsed;
+// ─── User XP helpers ──────────────────────────────────────────────────────────
+
+function getUserXpData(db, userId) {
+  let row = db.prepare(`
+    SELECT * FROM user_xp WHERE user_id = ?
+  `).get(userId);
+  
+  if (!row) {
+    db.prepare(`
+      INSERT INTO user_xp (user_id, lifetime_xp, current_xp, level, gems)
+      VALUES (?, 0, 0, 0, 0)
+    `).run(userId);
+    row = db.prepare(`SELECT * FROM user_xp WHERE user_id = ?`).get(userId);
+  }
+  
+  return row;
 }
 
-function setXpCooldown(db, userId, clanId) {
+function awardXp(db, userId, amount) {
+  const user = getUserXpData(db, userId);
+  const newCurrentXp = user.current_xp + amount;
+  const newLifetimeXp = user.lifetime_xp + amount;
+  
+  let newLevel = user.level;
+  let leveledUp = false;
+  
+  // Check if user leveled up (only award 1 gem per level, not per multiple levelups)
+  if (newCurrentXp >= XP_PER_LEVEL) {
+    const levelsGained = Math.floor(newCurrentXp / XP_PER_LEVEL);
+    newLevel = user.level + levelsGained;
+    leveledUp = levelsGained > 0;
+  }
+  
+  const finalCurrentXp = newCurrentXp % XP_PER_LEVEL;
+  
+  // Award exactly 1 gem if they leveled up
+  const newGems = leveledUp ? user.gems + GEMS_PER_LEVEL : user.gems;
+  
   db.prepare(`
-    INSERT INTO xp_cooldowns (user_id, clan_id, last_xp_time)
-    VALUES (?, ?, ?)
-    ON CONFLICT(user_id, clan_id) DO UPDATE SET last_xp_time = excluded.last_xp_time
-  `).run(userId, clanId, Date.now());
-}
-
-function awardXp(db, clanId, amount) {
-  db.prepare('UPDATE clans SET xp = xp + ? WHERE id = ?').run(amount, clanId);
+    UPDATE user_xp 
+    SET lifetime_xp = ?, current_xp = ?, level = ?, gems = ?
+    WHERE user_id = ?
+  `).run(newLifetimeXp, finalCurrentXp, newLevel, newGems, userId);
+  
+  return {
+    xpGained: amount,
+    lifetimeXp: newLifetimeXp,
+    currentXp: finalCurrentXp,
+    level: newLevel,
+    gems: newGems,
+    leveledUp,
+    previousLevel: user.level,
+  };
 }
 
 // ─── Slash command definitions ────────────────────────────────────────────────
@@ -197,6 +232,9 @@ const commands = [
       sub.setName('info')
         .setDescription('Show information about your clan')
     ),
+  new SlashCommandBuilder()
+    .setName('level')
+    .setDescription('Check your XP and level information'),
 ];
 
 // ─── Command handler ──────────────────────────────────────────────────────────
@@ -213,7 +251,7 @@ async function handleClan(interaction, db, client) {
 
   try {
 
-    // ── /clan create ──────────────────────────────────────────────────────────
+    // ── /clan create ───────────────────────────────────────────────────────────
     if (sub === 'create') {
       // Check if user is already in a clan
       const existing = getClanByMember(db, user.id, guild.id);
@@ -339,7 +377,6 @@ async function handleClan(interaction, db, client) {
       try {
         db.transaction(() => {
           db.prepare('DELETE FROM clan_members WHERE clan_id = ?').run(clan.id);
-          db.prepare('DELETE FROM xp_cooldowns WHERE clan_id = ?').run(clan.id);
           db.prepare('DELETE FROM clans WHERE id = ?').run(clan.id);
         })();
       } catch (err) {
@@ -512,28 +549,74 @@ async function handleClan(interaction, db, client) {
   }
 }
 
+// ─── Level command handler ────────────────────────────────────────────────────
+async function handleLevel(interaction, db) {
+  const { user } = interaction;
+
+  try {
+    const xpData = getUserXpData(db, user.id);
+    const xpToNextLevel = XP_PER_LEVEL - xpData.current_xp;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle(`📊 ${user.username}'s Level Info`)
+      .addFields(
+        { name: '⭐ Level', value: `${xpData.level}`, inline: true },
+        { name: '💎 Gems', value: `${xpData.gems}`, inline: true },
+        { name: '✨ Lifetime XP', value: `${xpData.lifetime_xp.toLocaleString()}`, inline: true },
+        { name: '📈 Current XP Progress', value: `${xpData.current_xp}/${XP_PER_LEVEL}`, inline: true },
+        { name: '🎯 XP to Next Level', value: `${xpToNextLevel}`, inline: true },
+      )
+      .setFooter({ text: `Gain 2 XP per message!` })
+      .setTimestamp();
+
+    return await safeReply(interaction, { embeds: [embed] });
+  } catch (err) {
+    logError('handleLevel', err);
+    await safeReply(interaction, {
+      content: '❌ An unexpected error occurred. Please try again.',
+      ephemeral: true,
+    });
+  }
+}
+
 // ─── XP message handler ───────────────────────────────────────────────────────
 // Call this from the bot's `messageCreate` event.
-async function handleXp(message, db) {
+// This applies to ALL users, not just clan members
+async function handleXp(message, db, client) {
   // Ignore bots and DMs
   if (message.author.bot || !message.guild) return;
 
-  const userId  = message.author.id;
-  const guildId = message.guild.id;
+  const userId = message.author.id;
 
   try {
-    const clan = getClanByMember(db, userId, guildId);
-    if (!clan) return; // User is not in a clan — nothing to do
+    const result = awardXp(db, userId, XP_PER_MESSAGE);
 
-    const remaining = getXpCooldownRemaining(db, userId, clan.id);
-    if (remaining > 0) return; // Still on cooldown
+    // If user leveled up, send a level-up message
+    if (result.leveledUp) {
+      const embed = new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setTitle('🎉 Level Up!')
+        .addFields(
+          { name: '⭐ New Level', value: `${result.level}`, inline: true },
+          { name: '💎 New Balance', value: `${result.gems} gem${result.gems === 1 ? '' : 's'}`, inline: true },
+          { name: '✨ Lifetime XP', value: `${result.lifetimeXp.toLocaleString()}`, inline: true },
+          { name: '📈 Current XP', value: `${result.currentXp}/${XP_PER_LEVEL}`, inline: false },
+        )
+        .setThumbnail(message.author.displayAvatarURL())
+        .setFooter({ text: `Keep chatting to level up more!` })
+        .setTimestamp();
 
-    const xpGain = Math.floor(Math.random() * (XP_MAX - XP_MIN + 1)) + XP_MIN;
-    awardXp(db, clan.id, xpGain);
-    setXpCooldown(db, userId, clan.id);
+      try {
+        await message.reply({ embeds: [embed] });
+      } catch (err) {
+        logError(`handleXp: failed to send level-up message`, err);
+      }
+    }
   } catch (err) {
     logError(`handleXp [user=${userId}]`, err);
   }
 }
 
-module.exports = { commands, handleClan, handleXp, initClanTables };
+module.exports = { commands, handleClan, handleLevel, handleXp, initClanTables };
+

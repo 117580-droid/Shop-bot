@@ -26,7 +26,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints } = require('./game.js');
-const { commands: clanCommands, handleClan, handleXp, initClanTables } = require('./clan.js');
+const { commands: clanCommands, handleClan, handleLevel, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
@@ -865,6 +865,10 @@ client.on('interactionCreate', async (interaction) => {
     // Clan commands
     if (clanCommands.some(cmd => cmd.name === commandName)) {
       return await handleClan(interaction, db);
+    // Level commands
+    if (commandName === "level") {
+      return await handleLevel(interaction, db);
+
     }
 
     // Lottery commands
@@ -893,8 +897,8 @@ client.on('messageCreate', async (message) => {
   // Check for mentions and handle antispam
   await checkMentions(message, db, client);
 
-  // Handle XP for clan members
-  await handleXp(message, db);
+  // Award XP to all players
+  await handleXp(message, db, client);
 });
 
 client.on('messageReactionAdd', async (reaction, user) => {
