@@ -493,6 +493,11 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
                 inline: false,
               },
               {
+                name: '🛒 Shop Management (Admin Only)',
+                value: '`!additem <name> <price>` - Add an item to the shop\n`!removeitem <name>` - Remove an item from the shop',
+                inline: false,
+              },
+              {
                 name: '🏰 Clan Commands',
                 value: '`/clan create <name>` - Create a new clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite a user to your clan\n`/clan info` - View your clan info\n`!clans` - View clan leaderboard (top 10)',
                 inline: false,
