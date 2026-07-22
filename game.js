@@ -666,8 +666,8 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         // Alert owner + secondary user: someone found them — new hiding spot revealed.
         await alertBothUsers(
           client,
-          '🎯 Someone Found Messi!',
-          `**${user.username}** (<@${user.id}>) found Messi at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
+          '🎯 Someone Found Madmotherflupa!',
+          `**${user.username}** (<@${user.id}>) found Madmotherflupa at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
           0x57F287,
         );
 
@@ -679,7 +679,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
-                `🪙 1 point **${user.username}** found Messi in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your points!`
+                `🪙 1 point **${user.username}** found Madmotherflupa in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your points!`
               )
               .setFooter({ text: poi.name })
               .setTimestamp()
@@ -697,7 +697,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
         await alertBothUsers(
           client,
           '❌ Wrong Guess!',
-          `**${user.username}** (<@${user.id}>) guessed **${guess}** but Messi was at **${revealedPoi.name}**.\nNew hiding spot: **${currentPoi.name}**`,
+          `**${user.username}** (<@${user.id}>) guessed **${guess}** but Madmotherflupa was at **${revealedPoi.name}**.\nNew hiding spot: **${currentPoi.name}**`,
           0xED4245,
         );
 
@@ -708,7 +708,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
               .setColor(0xED4245)
               .setTitle('❌ Wrong Guess!')
               .setThumbnail(revealedPoi.image)
-              .setDescription(`**Messi** was hiding at **${revealedPoi.name}**`)
+              .setDescription(`**Madmotherflupa** was hiding at **${revealedPoi.name}**`)
               .setFooter({ text: revealedPoi.name })
               .setTimestamp()
           ],
@@ -1061,7 +1061,7 @@ async function checkCooldowns(client) {
             .setColor(0x57F287)
             .setTitle('⏰ Your MadGuessr cooldown has now expired')
             .setDescription(
-              "Your cooldown has expired! Go back and use `/guess` to try and find Messi 🎯"
+              "Your cooldown has expired! Go back and use `/guess` to try and find Madmotherflupa 🎯"
             )
             .setTimestamp()
         ]

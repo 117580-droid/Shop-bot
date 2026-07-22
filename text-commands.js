@@ -65,8 +65,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
         await alertBothUsers(
           client,
-          '🎯 Someone Found Messi!',
-          `**${user.username}** found Messi at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
+          '🎯 Someone Found Madmotherflupa!',
+          `**${user.username}** found Madmotherflupa at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
           0x57F287,
         );
 
@@ -77,7 +77,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               .setTitle('🎉 Correct!')
               .setThumbnail(poi.image)
               .setDescription(
-                `🪙 1 point **${user.username}** found Messi in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your points!`
+                `🪙 1 point **${user.username}** found Madmotherflupa in **${poi.name}**\n\nDM <@1249146669061115904> (Sam), <@1253458483240763434> (Foxyboy3), or <@1347396372688797811> (Emily) to claim your points!`
               )
               .setFooter({ text: poi.name })
               .setTimestamp()
@@ -91,7 +91,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         await alertBothUsers(
           client,
           '❌ Wrong Guess!',
-          `**${user.username}** guessed **${guess}** but Messi was at **${revealedPoi.name}**.\nNew hiding spot: **${gameModule.currentPoi.name}**`,
+          `**${user.username}** guessed **${guess}** but Madmotherflupa was at **${revealedPoi.name}**.\nNew hiding spot: **${gameModule.currentPoi.name}**`,
           0xED4245,
         );
 
@@ -102,7 +102,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               .setTitle('❌ Wrong Guess!')
               .setThumbnail(revealedPoi.image)
               .setDescription(
-                `**${user.username}** guessed **${guess}**, but Messi was hiding at **${revealedPoi.name}**!`
+                `**${user.username}** guessed **${guess}**, but Madmotherflupa was hiding at **${revealedPoi.name}**!`
               )
               .setFooter({ text: revealedPoi.name })
               .setTimestamp()
@@ -353,7 +353,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
             .addFields(
               {
                 name: '🎯 Game Commands',
-                value: '`!guess <poi-name>` - Guess where Messi is hiding (channel restricted)\n`/spin` - Spin the POI wheel\n`/daily-hint` - Get a daily hint',
+                value: '`!guess <poi-name>` - Guess where Madmotherflupa is hiding (channel restricted)\n`/spin` - Spin the POI wheel\n`/daily-hint` - Get a daily hint',
                 inline: false,
               },
               {
