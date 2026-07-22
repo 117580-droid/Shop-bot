@@ -25,10 +25,11 @@ function calculateRewardPoints(minutesInServer) {
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
-const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints } = require('./game.js');
+const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS } = require('./game.js');
 const { commands: clanCommands, handleClan, handleLevel, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
+const { handleTextCommands } = require('./text-commands.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
@@ -891,6 +892,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
@@ -899,8 +901,18 @@ client.on('messageCreate', async (message) => {
 
   // Award XP to all players
   await handleXp(message, db, client);
-});
 
+  // Handle text commands with ! prefix
+  const gameModule = {
+    getCurrentPoi,
+    newRandomPoi,
+    getCooldownRemaining,
+    setCooldown,
+    formatMs,
+    FORTNITE_POIS,
+  };
+  await handleTextCommands(message, db, client, gameModule, alertBothUsers);
+});
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
   await handleGiveawayReaction(reaction, user, db);
