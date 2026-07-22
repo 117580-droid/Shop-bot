@@ -614,6 +614,15 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
     // /guess ───────────────────────────────────────────────────────────────────
     if (commandName === 'guess') {
       const poi = getCurrentPoi();
+      // Check if command is being used in the correct channel
+      const GUESS_CHANNEL_ID = '1529364927415062618';
+      if (interaction.channelId !== GUESS_CHANNEL_ID) {
+        return await safeReply(interaction, {
+          content: `❌ You can only use /guess in <#${GUESS_CHANNEL_ID}>`,
+          ephemeral: true,
+        });
+      }
+
 
       const isOwner = false; // Everyone gets cooldown
       const remaining = getCooldownRemaining(user.id);
