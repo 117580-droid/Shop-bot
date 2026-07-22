@@ -186,6 +186,55 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
+    // ── !xp ────────────────────────────────────────────────────────────────────
+    if (command === 'xp') {
+      const target = message.mentions.users.first() ?? message.author;
+      const row = db.prepare('SELECT level, current_xp, lifetime_xp FROM user_xp WHERE user_id = ?').get(target.id);
+      
+      const level = row ? row.level : 0;
+      const currentXp = row ? row.current_xp : 0;
+      const lifetimeXp = row ? row.lifetime_xp : 0;
+      const xpNeededPerLevel = 100;
+      const xpNeeded = xpNeededPerLevel - currentXp;
+      const progressPercent = Math.round((currentXp / xpNeededPerLevel) * 100);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle(`⭐ XP Stats - ${target.username}`)
+            .addFields(
+              {
+                name: '📊 Current Level',
+                value: `**${level}**`,
+                inline: true,
+              },
+              {
+                name: '✨ Lifetime XP',
+                value: `**${lifetimeXp.toLocaleString()}** XP`,
+                inline: true,
+              },
+              {
+                name: '💫 Progress to Next Level',
+                value: `**${currentXp}** / **${xpNeededPerLevel}** XP`,
+                inline: false,
+              },
+              {
+                name: '🎯 XP Needed to Level Up',
+                value: `**${xpNeeded}** XP`,
+                inline: true,
+              },
+              {
+                name: '📈 Progress Bar',
+                value: `${'█'.repeat(Math.floor(progressPercent / 5))}${'░'.repeat(20 - Math.floor(progressPercent / 5))} **${progressPercent}%**`,
+                inline: false,
+              }
+            )
+            .setTimestamp(),
+        ],
+      });
+    }
+
     // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
       return await safeReply(message, {
@@ -314,7 +363,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '⭐ XP & Levels',
-                value: '`/level` - Check your XP and level info\n`!xpleaderboard` - View top 10 players by XP',
+                value: '`!xp [@user]` - Check your or another player\'s XP, level, and progress\n`/level` - Check your XP and level info\n`!xpleaderboard` - View top 10 players by XP',
                 inline: false,
               },
               {
