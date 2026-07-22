@@ -25,7 +25,7 @@ function calculateRewardPoints(minutesInServer) {
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
-const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS } = require('./game.js');
+const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS, userCooldowns } = require('./game.js');
 const { commands: clanCommands, handleClan, handleLevel, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
@@ -655,7 +655,7 @@ initLotteryTable(db);
 
 // ─── Game Module ──────────────────────────────────────────────────────────────
 
-const gameModule = { userCooldowns: new Map() };
+const gameModule = { userCooldowns, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS };
 
 // ─── Points Commands ──────────────────────────────────────────────────────────
 
@@ -887,15 +887,6 @@ client.on('messageCreate', async (message) => {
   await handleXp(message, db, client);
 
   // Handle text commands with ! prefix
-  const gameModule = {
-    getCurrentPoi,
-    newRandomPoi,
-    getCooldownRemaining,
-    setCooldown,
-    formatMs,
-    FORTNITE_POIS,
-  };
-  await handleTextCommands(message, db, client, gameModule, alertBothUsers);
 });
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
