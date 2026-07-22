@@ -786,22 +786,6 @@ async function handlePointsCommand(interaction) {
     });
   }
 
-  if (commandName === 'points') {
-    const target = interaction.options.getUser('user') ?? user;
-    const row = db.prepare('SELECT points FROM users WHERE user_id = ?').get(target.id);
-    const pts = row ? row.points : 0;
-
-    return await safeReply(interaction, {
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x5865F2)
-          .setTitle('💰 Points Balance')
-          .setDescription(`**${target.username}** has **${pts} point${pts !== 1 ? 's' : ''}**.`)
-          .setTimestamp(),
-      ],
-      ephemeral: true,
-    });
-  }
 
   if (commandName === 'leaderboard') {
     // Return an empty leaderboard — no users appear by default.

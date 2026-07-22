@@ -9,46 +9,6 @@ function logError(context, err) {
 async function safeReply(message, payload) {
   try {
     await message.reply(payload);
-    // ── !help ─────────────────────────────────────────────────────────────────
-    if (command === 'help') {
-      return await safeReply(message, {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle('📖 Command Help')
-            .setDescription('Here are all the commands you can use:')
-            .addFields(
-              {
-                name: '🎯 Game Commands',
-                value: '`!guess <poi-name>` - Guess where Messi is hiding (channel restricted)\n`/spin` - Spin the POI wheel\n`/daily-hint` - Get a daily hint',
-                inline: false,
-              },
-              {
-                name: '💰 Economy Commands',
-                value: '`!gems [@user]` - Check your or another player's gem balance\n`!shop` - Open the shop to buy items\n`/points [@user]` - Check your or another player's points',
-                inline: false,
-              },
-              {
-                name: '⭐ XP & Levels',
-                value: '`/level` - Check your XP and level info\n`!xpleaderboard` - View top 10 players by XP',
-                inline: false,
-              },
-              {
-                name: '🏰 Clan Commands',
-                value: '`/clan create <name>` - Create a new clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite a user to your clan\n`/clan info` - View your clan info\n`!clans` - View clan leaderboard (top 10)',
-                inline: false,
-              },
-              {
-                name: '🎰 Other Commands',
-                value: '`/buy` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
-                inline: false,
-              }
-            )
-            .setFooter({ text: 'Prefix: ! for text commands, / for slash commands' })
-            .setTimestamp(),
-        ],
-      });
-    }
   } catch (err) {
     logError('safeReply', err);
   }
@@ -56,17 +16,6 @@ async function safeReply(message, payload) {
 
 // ─── Text command handlers ─────────────────────────────────────────────────────
 
-/**
- * Handle text commands with ! prefix
- * @param {Message} message - Discord message object
- * @param {Database} db - SQLite database instance
- * @param {Client} client - Discord client
- * @param {Function} getCurrentPoi - Get current POI function from game.js
- * @param {Function} getCooldownRemaining - Get cooldown function from game.js
- * @param {Function} setCooldown - Set cooldown function from game.js
- * @param {Function} newRandomPoi - Get new random POI function from game.js
- * @param {Function} formatMs - Format milliseconds function
- */
 async function handleTextCommands(message, db, client, gameModule, alertBothUsers) {
   const PREFIX = '!';
   
@@ -78,7 +27,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
   try {
     // ── !guess ─────────────────────────────────────────────────────────────────
     if (command === 'guess') {
-      // Check channel restriction
       const GUESS_CHANNEL_ID = '1529364927415062618';
       if (message.channelId !== GUESS_CHANNEL_ID) {
         return await safeReply(message, {
@@ -104,7 +52,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      // Validate that the guess is a real POI name
       const validPois = FORTNITE_POIS.map(p => p.name.toLowerCase());
       if (!validPois.includes(guess.toLowerCase())) {
         return await safeReply(message, {
@@ -113,7 +60,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       }
 
       if (guess.toLowerCase() === poi.name.toLowerCase()) {
-        // ✅ Correct!
         setCooldown(user.id);
         const newPoi = newRandomPoi();
 
@@ -138,7 +84,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           ],
         });
       } else {
-        // ❌ Wrong guess
         const revealedPoi = poi;
         setCooldown(user.id);
         newRandomPoi();
@@ -183,6 +128,64 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
+    // ── !addgem ────────────────────────────────────────────────────────────────
+    if (command === 'addgem') {
+      const target = message.mentions.users.first();
+      const amount = parseInt(args[2]);
+
+      if (!target || isNaN(amount) || amount <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!addgem @user <amount>`\nExample: `!addgem @John 5`',
+        });
+      }
+
+      const row = db.prepare('SELECT gems FROM user_xp WHERE user_id = ?').get(target.id);
+      const currentGems = row ? row.gems : 0;
+      const newGems = currentGems + amount;
+
+      db.prepare('INSERT INTO user_xp (user_id, gems) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET gems = ?')
+        .run(target.id, newGems, newGems);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Gems Added')
+            .setDescription(`Added **${amount}** gem${amount !== 1 ? 's' : ''} to **${target.username}**\n\nNew balance: **${newGems}** gems`)
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !removegem ─────────────────────────────────────────────────────────────
+    if (command === 'removegem') {
+      const target = message.mentions.users.first();
+      const amount = parseInt(args[2]);
+
+      if (!target || isNaN(amount) || amount <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!removegem @user <amount>`\nExample: `!removegem @John 5`',
+        });
+      }
+
+      const row = db.prepare('SELECT gems FROM user_xp WHERE user_id = ?').get(target.id);
+      const currentGems = row ? row.gems : 0;
+      const newGems = Math.max(0, currentGems - amount);
+
+      db.prepare('INSERT INTO user_xp (user_id, gems) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET gems = ?')
+        .run(target.id, newGems, newGems);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xED4245)
+            .setTitle('✅ Gems Removed')
+            .setDescription(`Removed **${amount}** gem${amount !== 1 ? 's' : ''} from **${target.username}**\n\nNew balance: **${newGems}** gems`)
+            .setTimestamp(),
+        ],
+      });
+    }
+
     // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
       return await safeReply(message, {
@@ -196,7 +199,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-    // ── !clans ────────────────────────────────────────────────────────────────────
+    // ── !clans ─────────────────────────────────────────────────────────────────
     if (command === 'clans') {
       if (!message.guild) {
         return await safeReply(message, {
@@ -243,7 +246,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-    // ── !xpleaderboard ─────────────────────────────────────────────────────────────
+    // ── !xpleaderboard ────────────────────────────────────────────────────────
     if (command === 'xpleaderboard') {
       if (!message.guild) {
         return await safeReply(message, {
@@ -290,7 +293,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-    // ── !help ─────────────────────────────────────────────────────────────────
+    // ── !help ──────────────────────────────────────────────────────────────────
     if (command === 'help') {
       return await safeReply(message, {
         embeds: [
@@ -306,7 +309,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '💰 Economy Commands',
-                value: '`!gems [@user]` - Check your or another player's gem balance\n`!shop` - Open the shop to buy items\n`/points [@user]` - Check your or another player's points',
+                value: '`!gems [@user]` - Check your or another player\'s gem balance\n`!shop` - Open the shop to buy items\n`!addgem @user <amount>` - Add gems to a user\n`!removegem @user <amount>` - Remove gems from a user',
                 inline: false,
               },
               {
@@ -330,6 +333,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
+
   } catch (err) {
     logError(`handleTextCommands [${command}]`, err);
     await safeReply(message, {
