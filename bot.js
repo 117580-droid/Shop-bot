@@ -867,15 +867,11 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // Points commands
-    if (pointsCommands.some(cmd => cmd.name === commandName)) {
-      return await handlePointsCommand(interaction);
-    }
   } catch (err) {
     logError(`Error handling command ${commandName}`, err);
     await safeReply(interaction, { content: 'An error occurred while processing your command.', ephemeral: true });
   }
 });
-
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -887,7 +883,9 @@ client.on('messageCreate', async (message) => {
   await handleXp(message, db, client);
 
   // Handle text commands with ! prefix
+  await handleTextCommands(message, db, client, gameModule, alertBothUsers);
 });
+
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
   await handleGiveawayReaction(reaction, user, db);
@@ -896,4 +894,3 @@ client.on('messageReactionAdd', async (reaction, user) => {
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 client.login(TOKEN);
-
