@@ -472,35 +472,63 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     }
 
     // ── !redeem ─────────────────────────────────────────────────────────────────
+    // ── !redeem ─────────────────────────────────────────────────────────────────
     if (command === 'redeem') {
+      const itemName = args.slice(1).join(' ').trim();
+
+      if (!itemName) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!redeem <item name>`\nExample: `!redeem Custom Badge`\n\nUse `!shop` to see available items.',
+        });
+      }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          price INTEGER NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const item = db.prepare('SELECT id, name, price FROM shop_items WHERE LOWER(name) = LOWER(?)').get(itemName);
+
+      if (!item) {
+        return await safeReply(message, {
+          content: `❌ Item **${itemName}** not found in shop.\n\nUse \`!shop\` to see available items.`,
+        });
+      }
+
+      const userRow = db.prepare('SELECT gems FROM user_xp WHERE user_id = ?').get(message.author.id);
+      const userGems = userRow ? userRow.gems : 0;
+
+      if (userGems < item.price) {
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xED4245)
+              .setTitle('❌ Not Enough Gems')
+              .setDescription(`You need **${item.price}** gems to buy **${item.name}**.\n\nYou only have **${userGems}** gems.`)
+              .setFooter({ text: `Need ${item.price - userGems} more gems` })
+              .setTimestamp(),
+          ],
+        });
+      }
+
+      const newGems = userGems - item.price;
+      db.prepare('UPDATE user_xp SET gems = ? WHERE user_id = ?').run(newGems, message.author.id);
+
       return await safeReply(message, {
         embeds: [
           new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle('🎟️ Lottery Tickets')
-            .setDescription('Buy lottery tickets to enter the **50 WIN LOTTERY** wheel draw!')
-            .addFields(
-              {
-                name: '🎰 How It Works',
-                value: 'Each ticket costs **50 gems**. Buy as many as you want for better odds!',
-                inline: false,
-              },
-              {
-                name: '🏆 Prize',
-                value: 'Win **1,000 gems** when your ticket is drawn!',
-                inline: false,
-              },
-              {
-                name: '📝 How to Buy',
-                value: 'Use `/buy <amount>` to purchase lottery tickets\nExample: `/buy 5` = 5 tickets for 250 gems',
-                inline: false,
-              },
-            )
-            .setFooter({ text: 'Use /buy <amount> to purchase tickets' })
+            .setColor(0x57F287)
+            .setTitle('✅ Purchase Successful!')
+            .setDescription(`You bought **${item.name}** for **${item.price}** gems!\n\nNew balance: **${newGems}** gems`)
             .setTimestamp(),
         ],
       });
     }
+
 
     // ── !help ───────────────────────────────────────────────────────────────────
     if (command === 'help') {
@@ -538,7 +566,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '🎰 Other Commands',
-                value: '`!redeem` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
+                value: '`!redeem <item name>` - Buy an item from the shop\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
                 inline: false,
               }
             )
