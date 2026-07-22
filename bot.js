@@ -657,151 +657,6 @@ initLotteryTable(db);
 
 const gameModule = { userCooldowns: new Map() };
 
-// ─── Points Commands ──────────────────────────────────────────────────────────
-
-const pointsCommands = [
-  new SlashCommandBuilder()
-    .setName('givepoints')
-    .setDescription('Give points to a user (Admin only)')
-    .addUserOption(o => o.setName('user').setDescription('The user to give points to').setRequired(true))
-    .addIntegerOption(o => o.setName('amount').setDescription('Number of points to give').setRequired(true).setMinValue(1))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-  new SlashCommandBuilder()
-    .setName('removepoints')
-    .setDescription('Remove points from a user (Admin only)')
-    .addUserOption(o => o.setName('user').setDescription('The user to remove points from').setRequired(true))
-    .addIntegerOption(o => o.setName('amount').setDescription('Number of points to remove').setRequired(true).setMinValue(1))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-  new SlashCommandBuilder()
-    .setName('points')
-    .setDescription('Check your current points balance')
-    .addUserOption(o => o.setName('user').setDescription('User to check points for (defaults to yourself)').setRequired(false)),
-
-  new SlashCommandBuilder()
-    .setName('leaderboard')
-    .setDescription('View the points leaderboard'),
-].map(cmd => cmd.toJSON());
-
-/**
- * Upsert a user's points in the local DB and sync to the coin-shop website.
- *
- * @param {string} userId      Discord user ID
- * @param {string} username    Discord username
- * @param {number} delta       Points to add (positive) or remove (negative)
- * @returns {number}           The new points total
- */
-function updateUserPoints(userId, username, delta) {
-  // Upsert the user row, then apply the delta (clamped to 0 minimum).
-  db.prepare(`
-    INSERT INTO users (user_id, username, points)
-    VALUES (?, ?, 0)
-    ON CONFLICT(user_id) DO UPDATE SET username = excluded.username
-  `).run(userId, username);
-
-  db.prepare(`
-    UPDATE users SET points = MAX(0, points + ?) WHERE user_id = ?
-  `).run(delta, userId);
-
-  const row = db.prepare('SELECT points FROM users WHERE user_id = ?').get(userId);
-  return row ? row.points : 0;
-}
-
-/**
- * Handle /givepoints, /removepoints, /points, and /leaderboard commands.
- */
-async function handlePointsCommand(interaction) {
-  const { commandName, user } = interaction;
-  const isOwner = OWNER_ID ? user.id === OWNER_ID : false;
-  const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
-
-  if (commandName === 'givepoints') {
-    if (!isOwner && !isAdmin) {
-      return await safeReply(interaction, { content: '❌ You do not have permission to use this command.', ephemeral: true });
-    }
-
-    const target = interaction.options.getUser('user');
-    const amount = interaction.options.getInteger('amount');
-
-    const newPoints = updateUserPoints(target.id, target.username, amount);
-
-    // Sync to coin-shop website
-    await sendCoinShopWebhook({
-      action:   'update_points',
-      userId:   target.id,
-      username: target.username,
-      points:   newPoints,
-    });
-
-    return await safeReply(interaction, {
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x57F287)
-          .setTitle('✅ Points Given')
-          .setDescription(`Gave **${amount} point${amount !== 1 ? 's' : ''}** to **${target.username}**.`)
-          .addFields(
-            { name: '👤 User',       value: `<@${target.id}>`, inline: true },
-            { name: '➕ Given',      value: `${amount}`,        inline: true },
-            { name: '💰 New Total', value: `${newPoints}`,     inline: true },
-          )
-          .setFooter({ text: `Updated by ${user.username}` })
-          .setTimestamp(),
-      ],
-    });
-  }
-
-  if (commandName === 'removepoints') {
-    if (!isOwner && !isAdmin) {
-      return await safeReply(interaction, { content: '❌ You do not have permission to use this command.', ephemeral: true });
-    }
-
-    const target = interaction.options.getUser('user');
-    const amount = interaction.options.getInteger('amount');
-
-    const newPoints = updateUserPoints(target.id, target.username, -amount);
-
-    // Sync to coin-shop website
-    await sendCoinShopWebhook({
-      action:   'update_points',
-      userId:   target.id,
-      username: target.username,
-      points:   newPoints,
-    });
-
-    return await safeReply(interaction, {
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0xED4245)
-          .setTitle('✅ Points Removed')
-          .setDescription(`Removed **${amount} point${amount !== 1 ? 's' : ''}** from **${target.username}**.`)
-          .addFields(
-            { name: '👤 User',       value: `<@${target.id}>`, inline: true },
-            { name: '➖ Removed',    value: `${amount}`,        inline: true },
-            { name: '💰 New Total', value: `${newPoints}`,     inline: true },
-          )
-          .setFooter({ text: `Updated by ${user.username}` })
-          .setTimestamp(),
-      ],
-    });
-  }
-
-
-  if (commandName === 'leaderboard') {
-    // Return an empty leaderboard — no users appear by default.
-    return await safeReply(interaction, {
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x5865F2)
-          .setTitle('🏆 Points Leaderboard')
-          .setDescription('No one is on the leaderboard yet. Points are awarded by admins via `/givepoints`.')
-          .setTimestamp(),
-      ],
-    });
-  }
-}
-
-// ─── Client Events ────────────────────────────────────────────────────────────
 
 client.once('ready', () => {
   log('INFO', `Logged in as ${client.user.tag}`);
@@ -819,7 +674,6 @@ client.once('ready', () => {
     ...clanCommands,
     ...lotteryCommands,
     ...giveawayCommands,
-    ...pointsCommands,
   ];
 
   (async () => {
@@ -867,9 +721,6 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // Points commands
-    if (pointsCommands.some(cmd => cmd.name === commandName)) {
-      return await handlePointsCommand(interaction);
-    }
   } catch (err) {
     logError(`Error handling command ${commandName}`, err);
     await safeReply(interaction, { content: 'An error occurred while processing your command.', ephemeral: true });
