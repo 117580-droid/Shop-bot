@@ -865,11 +865,11 @@ client.on('interactionCreate', async (interaction) => {
 
     // Clan commands
     if (clanCommands.some(cmd => cmd.name === commandName)) {
-      return await handleClan(interaction, db);
+      return await handleClan(interaction, db, client);
+    }
     // Level commands
     if (commandName === "level") {
       return await handleLevel(interaction, db);
-
     }
 
     // Lottery commands
