@@ -9,6 +9,46 @@ function logError(context, err) {
 async function safeReply(message, payload) {
   try {
     await message.reply(payload);
+    // ── !help ─────────────────────────────────────────────────────────────────
+    if (command === 'help') {
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('📖 Command Help')
+            .setDescription('Here are all the commands you can use:')
+            .addFields(
+              {
+                name: '🎯 Game Commands',
+                value: '`!guess <poi-name>` - Guess where Messi is hiding (channel restricted)\n`/spin` - Spin the POI wheel\n`/daily-hint` - Get a daily hint',
+                inline: false,
+              },
+              {
+                name: '💰 Economy Commands',
+                value: '`!gems [@user]` - Check your or another player's gem balance\n`!shop` - Open the shop to buy items\n`/points [@user]` - Check your or another player's points',
+                inline: false,
+              },
+              {
+                name: '⭐ XP & Levels',
+                value: '`/level` - Check your XP and level info\n`!xpleaderboard` - View top 10 players by XP',
+                inline: false,
+              },
+              {
+                name: '🏰 Clan Commands',
+                value: '`/clan create <name>` - Create a new clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite a user to your clan\n`/clan info` - View your clan info\n`!clans` - View clan leaderboard (top 10)',
+                inline: false,
+              },
+              {
+                name: '🎰 Other Commands',
+                value: '`/buy` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
+                inline: false,
+              }
+            )
+            .setFooter({ text: 'Prefix: ! for text commands, / for slash commands' })
+            .setTimestamp(),
+        ],
+      });
+    }
   } catch (err) {
     logError('safeReply', err);
   }
@@ -250,6 +290,46 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
+    // ── !help ─────────────────────────────────────────────────────────────────
+    if (command === 'help') {
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('📖 Command Help')
+            .setDescription('Here are all the commands you can use:')
+            .addFields(
+              {
+                name: '🎯 Game Commands',
+                value: '`!guess <poi-name>` - Guess where Messi is hiding (channel restricted)\n`/spin` - Spin the POI wheel\n`/daily-hint` - Get a daily hint',
+                inline: false,
+              },
+              {
+                name: '💰 Economy Commands',
+                value: '`!gems [@user]` - Check your or another player's gem balance\n`!shop` - Open the shop to buy items\n`/points [@user]` - Check your or another player's points',
+                inline: false,
+              },
+              {
+                name: '⭐ XP & Levels',
+                value: '`/level` - Check your XP and level info\n`!xpleaderboard` - View top 10 players by XP',
+                inline: false,
+              },
+              {
+                name: '🏰 Clan Commands',
+                value: '`/clan create <name>` - Create a new clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite a user to your clan\n`/clan info` - View your clan info\n`!clans` - View clan leaderboard (top 10)',
+                inline: false,
+              },
+              {
+                name: '🎰 Other Commands',
+                value: '`/buy` - Buy lottery tickets\n`/spin-wheel` - Spin the wheel\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
+                inline: false,
+              }
+            )
+            .setFooter({ text: 'Prefix: ! for text commands, / for slash commands' })
+            .setTimestamp(),
+        ],
+      });
+    }
   } catch (err) {
     logError(`handleTextCommands [${command}]`, err);
     await safeReply(message, {
