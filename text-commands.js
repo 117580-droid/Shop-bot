@@ -18,6 +18,7 @@ async function safeReply(message, payload) {
 
 async function handleTextCommands(message, db, client, gameModule, alertBothUsers) {
   const PREFIX = '!';
+  const OWNER_ID = process.env.OWNER_ID;
   
   if (!message.content.startsWith(PREFIX)) return;
 
@@ -111,7 +112,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       }
     }
 
-    // ── !gems ──────────────────────────────────────────────────────────────────
+    // ── !bank ──────────────────────────────────────────────────────────────────
     if (command === 'bank') {
       const target = message.mentions.users.first() ?? message.author;
       const row = db.prepare('SELECT gems FROM user_xp WHERE user_id = ?').get(target.id);
@@ -248,6 +249,100 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
+    // ── !additem ────────────────────────────────────────────────────────────────
+    if (command === 'additem') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      const itemName = args.slice(1, -1).join(' ').trim();
+      const itemPrice = parseInt(args[args.length - 1]);
+
+      if (!itemName || isNaN(itemPrice) || itemPrice <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!additem <item name> <price>`\nExample: `!additem Custom Badge 50`',
+        });
+      }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          price INTEGER NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      try {
+        db.prepare('INSERT INTO shop_items (name, price) VALUES (?, ?)').run(itemName, itemPrice);
+
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('✅ Item Added to Shop')
+              .setDescription(`**${itemName}** has been added for **${itemPrice}** gems`)
+              .setTimestamp(),
+          ],
+        });
+      } catch (err) {
+        if (err.message.includes('UNIQUE')) {
+          return await safeReply(message, {
+            content: `❌ An item named **${itemName}** already exists in the shop.`,
+          });
+        }
+        throw err;
+      }
+    }
+
+    // ── !removeitem ─────────────────────────────────────────────────────────────
+    if (command === 'removeitem') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      const itemName = args.slice(1).join(' ').trim();
+
+      if (!itemName) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!removeitem <item name>`\nExample: `!removeitem Custom Badge`',
+        });
+      }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          price INTEGER NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const item = db.prepare('SELECT id, name FROM shop_items WHERE name = ?').get(itemName);
+
+      if (!item) {
+        return await safeReply(message, {
+          content: `❌ Item **${itemName}** not found in the shop.`,
+        });
+      }
+
+      db.prepare('DELETE FROM shop_items WHERE id = ?').run(item.id);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xED4245)
+            .setTitle('✅ Item Removed from Shop')
+            .setDescription(`**${item.name}** has been removed from the shop`)
+            .setTimestamp(),
+        ],
+      });
+    }
+
     // ── !clans ─────────────────────────────────────────────────────────────────
     if (command === 'clans') {
       if (!message.guild) {
@@ -342,7 +437,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-    // ── !help ──────────────────────────────────────────────────────────────────
+    // ── !redeem ─────────────────────────────────────────────────────────────────
     if (command === 'redeem') {
       return await safeReply(message, {
         embeds: [
@@ -373,6 +468,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
+    // ── !help ───────────────────────────────────────────────────────────────────
     if (command === 'help') {
       return await safeReply(message, {
         embeds: [
