@@ -1,7 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 
 // Channel ID where welcome/farewell messages are sent
-const WELCOME_CHANNEL_ID = '1298309410847846410'; // Replace with your actual channel ID
+const WELCOME_CHANNEL_ID = '1529359748288479283'; // Replace with your actual channel ID
 
 /**
  * Handle member join event - sends welcome message
