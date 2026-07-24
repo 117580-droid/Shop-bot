@@ -572,6 +572,48 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       }
     }
 
+    // ── !gemleaderboard ───────────────────────────────────────────────────────
+    if (command === 'gemleaderboard') {
+      const players = db.prepare(`
+        SELECT user_id, gems FROM user_xp WHERE gems > 0 ORDER BY gems DESC LIMIT 15
+      `).all();
+
+      if (!players.length) {
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xE91E63)
+              .setTitle('💎 Gem Leaderboard')
+              .setDescription('No players with gems yet!')
+              .setTimestamp(),
+          ],
+        });
+      }
+
+      const playerLines = await Promise.all(
+        players.map(async (player, i) => {
+          let playerName = 'Unknown User';
+          try {
+            const user = await client.users.fetch(player.user_id);
+            playerName = user.username;
+          } catch {}
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**${i + 1}.**`;
+          return `${medal} **${playerName}** - 💎 ${player.gems.toLocaleString()} gems`;
+        })
+      );
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xE91E63)
+            .setTitle('💎 Gem Leaderboard')
+            .setDescription(playerLines.join('\n'))
+            .setFooter({ text: 'Updates in real-time as players buy items' })
+            .setTimestamp(),
+        ],
+      });
+    }
+
     // ── !help ──────────────────────────────────────────────────────────────────
     if (command === 'help') {
       return await safeReply(message, {
