@@ -419,7 +419,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           description TEXT,
           description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
       `).run();
 
       const item = db.prepare('SELECT id, name FROM shop_items WHERE LOWER(name) = LOWER(?)').get(itemName);
