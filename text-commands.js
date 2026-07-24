@@ -244,11 +244,13 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
+          description TEXT,
+          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
 
-      const items = db.prepare('SELECT id, name, price FROM shop_items ORDER BY price ASC').all();
+      const items = db.prepare('SELECT id, name, price, description FROM shop_items ORDER BY price ASC').all();
 
       if (!items.length) {
         return await safeReply(message, {
@@ -262,18 +264,24 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      const itemLines = items.map(item => `**${item.name}** - 💎 ${item.price} gems`);
+      const itemLines = items.map(item => {
+        let line = `**${item.name}** - 💎 ${item.price} gems`;
+        if (item.description) {
+          line += `\n_${item.description}_`;
+        }
+        return line;
+      });
 
       return await safeReply(message, {
         embeds: [
           new EmbedBuilder()
             .setColor(0x5865F2)
             .setTitle('🛍️ Shop Items')
-            .setDescription(itemLines.join('\n'))
+            .setDescription(itemLines.join('\n\n'))
             .addFields(
               {
                 name: '💡 How to Buy',
-                value: 'Use the item name and ask an admin to purchase it for you!',
+                value: 'Use `!redeem <item name>` to purchase an item!',
                 inline: false,
               }
             )
@@ -305,6 +313,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
+          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
@@ -352,6 +361,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
+          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
@@ -376,6 +386,66 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
+    // ── !adddescription ────────────────────────────────────────────────────────────
+    if (command === 'adddescription') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      // Find the last quote to split item name and description
+      const content = message.content.slice(PREFIX.length + 'adddescription'.length).trim();
+      
+      if (!content.includes('"')) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!adddescription <item name> "<description>`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
+        });
+      }
+
+      const firstQuoteIndex = content.indexOf('"');
+      const itemName = content.slice(0, firstQuoteIndex).trim();
+      const description = content.slice(firstQuoteIndex + 1, content.lastIndexOf('"')).trim();
+
+      if (!itemName || !description) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!adddescription <item name> "<description>`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
+        });
+      }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          price INTEGER NOT NULL,
+          description TEXT,
+          description TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const item = db.prepare('SELECT id, name FROM shop_items WHERE LOWER(name) = LOWER(?)').get(itemName);
+
+      if (!item) {
+        return await safeReply(message, {
+          content: `❌ Item **${itemName}** not found in the shop.`,
+        });
+      }
+
+      db.prepare('UPDATE shop_items SET description = ? WHERE id = ?').run(description, item.id);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Description Added')
+            .setDescription(`Updated description for **${item.name}**:\n\n"${description}"`)
+            .setTimestamp(),
+        ],
+      });
+    }
+
+
 
     // ── !clans ─────────────────────────────────────────────────────────────────
     if (command === 'clans') {
@@ -487,6 +557,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
+          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
