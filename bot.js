@@ -725,7 +725,6 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
-n// ── Member join/leave events ────────────────────────────────────────────────
 
 client.on('guildMemberAdd', async (member) => {
   await handleMemberJoin(member);
