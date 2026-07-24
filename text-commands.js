@@ -3,6 +3,7 @@ const { EmbedBuilder } = require('discord.js');
 // ─── Logging ──────────────────────────────────────────────────────────────────
 function logError(context, err) {
   console.error(`[ERROR] text-commands/${context}: ${err?.message ?? err}`);
+  if (err?.stack) console.error(err.stack);
 }
 
 // ─── Safe reply helper ─────────────────────────────────────────────────────────
@@ -238,50 +239,60 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
     // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
-      db.prepare(`
-        CREATE TABLE IF NOT EXISTS shop_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          price INTEGER NOT NULL,
-          description TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
+      try {
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS shop_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            price INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `).run();
 
-      const items = db.prepare('SELECT id, name, price, description FROM shop_items ORDER BY price ASC').all();
+        const items = db.prepare('SELECT id, name, price FROM shop_items ORDER BY price ASC').all();
 
-      if (!items.length) {
+        if (!items || items.length === 0) {
+          return await safeReply(message, {
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle('🛍️ Shop')
+                .setDescription('Shop is empty. No items for sale right now!')
+                .setTimestamp(),
+            ],
+          });
+        }
+
+        let shopText = '';
+        for (const item of items) {
+          shopText += `**${item.name}** - 💎 ${item.price} gems\n`;
+        }
+
+        if (shopText.length > 4096) {
+          shopText = shopText.substring(0, 4093) + '...';
+        }
+
         return await safeReply(message, {
           embeds: [
             new EmbedBuilder()
               .setColor(0x5865F2)
-              .setTitle('🛍️ Shop')
-              .setDescription('Shop is empty. No items for sale right now!')
+              .setTitle('🛍️ Shop Items')
+              .setDescription(shopText || 'No items to display')
+              .addFields({
+                name: '💡 How to Buy',
+                value: 'Use `!redeem <item name>` to purchase an item!',
+                inline: false,
+              })
+              .setFooter({ text: `${items.length} item${items.length !== 1 ? 's' : ''} available` })
               .setTimestamp(),
           ],
         });
+      } catch (shopErr) {
+        logError('shop command', shopErr);
+        return await safeReply(message, {
+          content: `❌ Shop error: ${shopErr.message}`,
+        });
       }
-
-      let shopText = '';
-      for (const item of items) {
-        shopText += `**${item.name}** - 💎 ${item.price} gems\n`;
-      }
-
-      return await safeReply(message, {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle('🛍️ Shop Items')
-            .setDescription(shopText)
-            .addFields({
-              name: '💡 How to Buy',
-              value: 'Use `!redeem <item name>` to purchase an item!',
-              inline: false,
-            })
-            .setFooter({ text: `${items.length} item${items.length !== 1 ? 's' : ''} available` })
-            .setTimestamp(),
-        ],
-      });
     }
 
     // ── !additem ────────────────────────────────────────────────────────────────
@@ -306,7 +317,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
-          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
@@ -354,7 +364,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
-          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
@@ -379,7 +388,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
-
 
     // ── !clans ─────────────────────────────────────────────────────────────────
     if (command === 'clans') {
@@ -490,7 +498,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
-          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
@@ -522,7 +529,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       const newGems = userGems - item.price;
       db.prepare('UPDATE user_xp SET gems = ? WHERE user_id = ?').run(newGems, message.author.id);
 
-      // Send purchase confirmation to user
       await safeReply(message, {
         embeds: [
           new EmbedBuilder()
@@ -533,7 +539,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
 
-      // Ping owner about the purchase
       try {
         const owner = await client.users.fetch(OWNER_ID);
         await owner.send({
@@ -563,7 +568,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           ],
         });
       } catch (err) {
-        logError('sendOwnerPurchaseNotification', err);
+        logError('sendOwnerNotification', err);
       }
     }
 
@@ -578,32 +583,32 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
             .addFields(
               {
                 name: '🎯 Game Commands',
-                value: '`!guess <poi-name>` - Guess where Madmotherflupa is hiding (channel restricted)\n`/spin` - Spin the POI wheel\n`/daily-hint` - Get a daily hint',
+                value: '`!guess <poi-name>` - Guess where Madmotherflupa is hiding\n`/spin` - Spin the POI wheel\n`/daily-hint` - Get a daily hint',
                 inline: false,
               },
               {
                 name: '💰 Economy Commands',
-                value: '`!bank [@user]` - Check your or another player\'s gem balance\n`!shop` - Open the shop to buy items\n`!addgem @user <amount>` - Add gems to a user\n`!removegem @user <amount>` - Remove gems from a user',
+                value: '`!bank [@user]` - Check gem balance\n`!shop` - Open the shop\n`!addgem @user <amount>` - Add gems\n`!removegem @user <amount>` - Remove gems',
                 inline: false,
               },
               {
                 name: '⭐ XP & Levels',
-                value: '`!xp [@user]` - Check your or another player\'s XP, level, and progress\n`/level` - Check your XP and level info\n`!xpleaderboard` - View top 10 players by XP',
+                value: '`!xp [@user]` - Check XP and level\n`/level` - Check your level\n`!xpleaderboard` - View top 10 players',
                 inline: false,
               },
               {
                 name: '🛒 Shop Management (Admin Only)',
-                value: '`!additem <name> <price>` - Add an item to the shop\n`!removeitem <name>` - Remove an item from the shop',
+                value: '`!additem <name> <price>` - Add item\n`!removeitem <name>` - Remove item',
                 inline: false,
               },
               {
                 name: '🏰 Clan Commands',
-                value: '`/clan create <name>` - Create a new clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite a user to your clan\n`/clan info` - View your clan info\n`!clans` - View clan leaderboard (top 10)',
+                value: '`/clan create <name>` - Create clan\n`/clan delete` - Delete clan\n`/clan invite <user>` - Invite user\n`!clans` - View clan leaderboard',
                 inline: false,
               },
               {
                 name: '🎰 Other Commands',
-                value: '`!redeem <item name>` - Buy an item from the shop\n`/giveaway` - Create a giveaway\n`!help` - Show this help menu',
+                value: '`!redeem <item name>` - Buy item\n`/giveaway` - Create giveaway\n`!help` - Show this menu',
                 inline: false,
               }
             )
