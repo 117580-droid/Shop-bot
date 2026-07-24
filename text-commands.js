@@ -238,6 +238,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
     // ── !shop ──────────────────────────────────────────────────────────────────
     // ── !shop ──────────────────────────────────────────────────────────────────
+    // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
@@ -263,32 +264,28 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      const itemLines = items.map(item => {
-        let line = `**${item.name}** - 💎 ${item.price} gems`;
-        if (item.description) {
-          line += `\n_${item.description}_`;
-        }
-        return line;
-      });
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('🛍️ Shop Items');
 
-      return await safeReply(message, {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle('🛍️ Shop Items')
-            .setDescription(itemLines.join('\n\n'))
-            .addFields(
-              {
-                name: '💡 How to Buy',
-                value: 'Use `!redeem <item name>` to purchase an item!',
-                inline: false,
-              }
-            )
-            .setFooter({ text: `${items.length} item${items.length !== 1 ? 's' : ''} available` })
-            .setTimestamp(),
-        ],
+      const fields = items.map(item => ({
+        name: `${item.name} - 💎 ${item.price} gems`,
+        value: item.description || 'No description',
+        inline: false,
+      }));
+
+      embed.addFields(...fields);
+      embed.addFields({
+        name: '💡 How to Buy',
+        value: 'Use `!redeem <item name>` to purchase an item!',
+        inline: false,
       });
+      embed.setFooter({ text: `${items.length} item${items.length !== 1 ? 's' : ''} available` });
+      embed.setTimestamp();
+
+      return await safeReply(message, { embeds: [embed] });
     }
+
 
     // ── !additem ────────────────────────────────────────────────────────────────
     if (command === 'additem') {
