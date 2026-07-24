@@ -245,7 +245,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
           description TEXT,
-          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `).run();
