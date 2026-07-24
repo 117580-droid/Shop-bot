@@ -380,62 +380,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-    // ── !adddescription ────────────────────────────────────────────────────────────
-    if (command === 'adddescription') {
-      if (message.author.id !== OWNER_ID) {
-        return await safeReply(message, {
-          content: '❌ Only the bot owner can use this command.',
-        });
-      }
-
-      const content = message.content.slice(PREFIX.length + 'adddescription'.length).trim();
-      
-      if (!content.includes('"')) {
-        return await safeReply(message, {
-          content: '❌ Usage: `!adddescription <item name> "<description>"`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
-        });
-      }
-
-      const firstQuoteIndex = content.indexOf('"');
-      const itemName = content.slice(0, firstQuoteIndex).trim();
-      const description = content.slice(firstQuoteIndex + 1, content.lastIndexOf('"')).trim();
-
-      if (!itemName || !description) {
-        return await safeReply(message, {
-          content: '❌ Usage: `!adddescription <item name> "<description>"`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
-        });
-      }
-
-      db.prepare(`
-        CREATE TABLE IF NOT EXISTS shop_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          price INTEGER NOT NULL,
-          description TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
-
-      const item = db.prepare('SELECT id, name FROM shop_items WHERE LOWER(name) = LOWER(?)').get(itemName);
-
-      if (!item) {
-        return await safeReply(message, {
-          content: `❌ Item **${itemName}** not found in the shop.`,
-        });
-      }
-
-      db.prepare('UPDATE shop_items SET description = ? WHERE id = ?').run(description, item.id);
-
-      return await safeReply(message, {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x57F287)
-            .setTitle('✅ Description Added')
-            .setDescription(`Updated description for **${item.name}**:\n\n"${description}"`)
-            .setTimestamp(),
-        ],
-      });
-    }
 
     // ── !clans ─────────────────────────────────────────────────────────────────
     if (command === 'clans') {
@@ -649,7 +593,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '🛒 Shop Management (Admin Only)',
-                value: '`!additem <name> <price>` - Add an item to the shop\n`!removeitem <name>` - Remove an item from the shop\n`!adddescription <name> "<description>"` - Add a description to an item',
                 inline: false,
               },
               {
