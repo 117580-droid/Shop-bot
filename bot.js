@@ -10,6 +10,13 @@ const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = r
 const { handleTextCommands } = require('./text-commands.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 
+// ─── Live webhook notification channel ───────────────────────────────────────
+const LIVE_WEBHOOK_CHANNEL_ID = '1530160358281449563';
+
+const postWebhookInfoCommand = new SlashCommandBuilder()
+  .setName('post-webhook-info')
+  .setDescription('Post live webhook setup instructions to the notifications channel');
+
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
 // through silently and crashes the process without a trace.
@@ -652,6 +659,7 @@ client.once('ready', () => {
     ...clanCommands,
     ...lotteryCommands,
     ...giveawayCommands,
+    postWebhookInfoCommand,
   ];
 
   (async () => {
@@ -667,6 +675,59 @@ client.once('ready', () => {
   // Send daily hints
   sendDailyHints(client, db);
 });
+
+/**
+ * Handle the /post-webhook-info command.
+ *
+ * Posts an embed to the live-notification channel explaining how to configure
+ * the /api/live-webhook endpoint so external services (Twitch, TikTok, etc.)
+ * can notify the server when a streamer goes live.
+ */
+async function handlePostWebhookInfo(interaction, discordClient) {
+  const channel = await discordClient.channels.fetch(LIVE_WEBHOOK_CHANNEL_ID).catch(() => null);
+
+  if (!channel) {
+    return await safeReply(interaction, {
+      content: 'Could not find the notifications channel. Please check the channel ID.',
+      ephemeral: true,
+    });
+  }
+
+  const examplePayload = JSON.stringify(
+    { platform: 'twitch', username: 'foxyboy3', title: 'Going live right now!' },
+    null,
+    2
+  );
+
+  const embed = new EmbedBuilder()
+    .setTitle('🔴 Live Notification Setup')
+    .setColor(0x9B59B6)
+    .setDescription(
+      'This webhook pings **@everyone** in this channel whenever a configured streamer goes live. ' +
+      'It works with both **Twitch** and **TikTok** — whichever platform detects the stream starting ' +
+      'just needs to POST to the endpoint below.'
+    )
+    .addFields(
+      { name: 'Endpoint', value: '`POST /api/live-webhook`' },
+      { name: 'Example Payload', value: '```json\n' + examplePayload + '\n```' },
+      {
+        name: 'How it works',
+        value:
+          'When your Twitch or TikTok integration detects that a streamer has gone live, ' +
+          'have it send a POST request to `/api/live-webhook` with the JSON payload shown above. ' +
+          'The bot will then post an announcement here and ping everyone.',
+      }
+    )
+    .setTimestamp();
+
+  try {
+    await channel.send({ embeds: [embed] });
+    await safeReply(interaction, { content: `Posted webhook setup info to <#${LIVE_WEBHOOK_CHANNEL_ID}>.`, ephemeral: true });
+  } catch (err) {
+    logError('handlePostWebhookInfo', err);
+    await safeReply(interaction, { content: 'Failed to post the webhook info. Check bot permissions in that channel.', ephemeral: true });
+  }
+}
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isCommand()) return;
@@ -696,6 +757,11 @@ client.on('interactionCreate', async (interaction) => {
     // Giveaway commands
     if (giveawayCommands.some(cmd => cmd.name === commandName)) {
       return await handleGiveaway(interaction, db);
+    }
+
+    // Post live-webhook setup info to the notifications channel
+    if (commandName === 'post-webhook-info') {
+      return await handlePostWebhookInfo(interaction, client);
     }
   } catch (err) {
     logError(`Error handling command ${commandName}`, err);
