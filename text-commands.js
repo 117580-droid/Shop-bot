@@ -239,6 +239,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     // ── !shop ──────────────────────────────────────────────────────────────────
     // ── !shop ──────────────────────────────────────────────────────────────────
     // ── !shop ──────────────────────────────────────────────────────────────────
+    // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
@@ -264,27 +265,28 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle('🛍️ Shop Items');
+      let shopText = '';
+      for (const item of items) {
+        shopText += `**${item.name}** - 💎 ${item.price} gems\n`;
+      }
 
-      const fields = items.map(item => ({
-        name: `${item.name} - 💎 ${item.price} gems`,
-        value: item.description || 'No description',
-        inline: false,
-      }));
-
-      embed.addFields(...fields);
-      embed.addFields({
-        name: '💡 How to Buy',
-        value: 'Use `!redeem <item name>` to purchase an item!',
-        inline: false,
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🛍️ Shop Items')
+            .setDescription(shopText)
+            .addFields({
+              name: '💡 How to Buy',
+              value: 'Use `!redeem <item name>` to purchase an item!',
+              inline: false,
+            })
+            .setFooter({ text: `${items.length} item${items.length !== 1 ? 's' : ''} available` })
+            .setTimestamp(),
+        ],
       });
-      embed.setFooter({ text: `${items.length} item${items.length !== 1 ? 's' : ''} available` });
-      embed.setTimestamp();
-
-      return await safeReply(message, { embeds: [embed] });
     }
+
 
 
     // ── !additem ────────────────────────────────────────────────────────────────
