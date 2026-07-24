@@ -9,6 +9,7 @@ const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
 const { handleTextCommands } = require('./text-commands.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
+const { handleMemberJoin, handleMemberRemove } = require('./welcome.js');
 
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
@@ -724,4 +725,13 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
+n// ── Member join/leave events ────────────────────────────────────────────────
+
+client.on('guildMemberAdd', async (member) => {
+  await handleMemberJoin(member);
+});
+
+client.on('guildMemberRemove', async (member) => {
+  await handleMemberRemove(member);
+});
 client.login(TOKEN);
