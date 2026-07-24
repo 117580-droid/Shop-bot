@@ -593,6 +593,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '🛒 Shop Management (Admin Only)',
+                value: '`!additem <name> <price>` - Add an item to the shop\n`!removeitem <name>` - Remove an item from the shop',
                 inline: false,
               },
               {
