@@ -237,9 +237,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     }
 
     // ── !shop ──────────────────────────────────────────────────────────────────
-    // ── !shop ──────────────────────────────────────────────────────────────────
-    // ── !shop ──────────────────────────────────────────────────────────────────
-    // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
@@ -286,8 +283,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
-
-
 
     // ── !additem ────────────────────────────────────────────────────────────────
     if (command === 'additem') {
@@ -384,6 +379,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
+
     // ── !adddescription ────────────────────────────────────────────────────────────
     if (command === 'adddescription') {
       if (message.author.id !== OWNER_ID) {
@@ -392,12 +388,11 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      // Find the last quote to split item name and description
       const content = message.content.slice(PREFIX.length + 'adddescription'.length).trim();
       
       if (!content.includes('"')) {
         return await safeReply(message, {
-          content: '❌ Usage: `!adddescription <item name> "<description>`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
+          content: '❌ Usage: `!adddescription <item name> "<description>"`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
         });
       }
 
@@ -407,7 +402,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
       if (!itemName || !description) {
         return await safeReply(message, {
-          content: '❌ Usage: `!adddescription <item name> "<description>`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
+          content: '❌ Usage: `!adddescription <item name> "<description>"`\nExample: `!adddescription Custom Badge "A shiny badge for special members"`',
         });
       }
 
@@ -417,8 +412,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           name TEXT NOT NULL UNIQUE,
           price INTEGER NOT NULL,
           description TEXT,
-          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
       `).run();
 
       const item = db.prepare('SELECT id, name FROM shop_items WHERE LOWER(name) = LOWER(?)').get(itemName);
@@ -441,8 +436,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
-
-
 
     // ── !clans ─────────────────────────────────────────────────────────────────
     if (command === 'clans') {
@@ -539,7 +532,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
     }
 
     // ── !redeem ─────────────────────────────────────────────────────────────────
-    // ── !redeem ─────────────────────────────────────────────────────────────────
     if (command === 'redeem') {
       const itemName = args.slice(1).join(' ').trim();
 
@@ -609,7 +601,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               .addFields(
                 {
                   name: '👤 Buyer',
-                  value: `<@${message.author.id}> (${message.author.username})`,
+                  value: `<@${message.author.id}>`,
                   inline: true,
                 },
                 {
@@ -621,24 +613,17 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
                   name: '💎 Price',
                   value: `**${item.price}** gems`,
                   inline: true,
-                },
-                {
-                  name: '🏷️ Guild',
-                  value: message.guild ? message.guild.name : 'DM',
-                  inline: true,
                 }
               )
-              .setFooter({ text: `Purchase ID: ${message.author.id}` })
               .setTimestamp(),
           ],
         });
       } catch (err) {
-        logError('redeem - owner notification', err);
+        logError('sendOwnerPurchaseNotification', err);
       }
     }
 
-
-    // ── !help ───────────────────────────────────────────────────────────────────
+    // ── !help ──────────────────────────────────────────────────────────────────
     if (command === 'help') {
       return await safeReply(message, {
         embeds: [
