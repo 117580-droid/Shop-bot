@@ -248,7 +248,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         )
       `).run();
 
-      const items = db.prepare('SELECT id, name, price FROM shop_items ORDER BY name ASC').all();
+      const items = db.prepare('SELECT id, name, price FROM shop_items ORDER BY price ASC').all();
 
       if (!items.length) {
         return await safeReply(message, {
