@@ -518,7 +518,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       const newGems = userGems - item.price;
       db.prepare('UPDATE user_xp SET gems = ? WHERE user_id = ?').run(newGems, message.author.id);
 
-      return await safeReply(message, {
+      // Send purchase confirmation to user
+      await safeReply(message, {
         embeds: [
           new EmbedBuilder()
             .setColor(0x57F287)
@@ -527,6 +528,45 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
             .setTimestamp(),
         ],
       });
+
+      // Ping owner about the purchase
+      try {
+        const owner = await client.users.fetch(OWNER_ID);
+        await owner.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x5865F2)
+              .setTitle('🛒 New Shop Purchase!')
+              .setDescription(`**${message.author.username}** bought **${item.name}**`)
+              .addFields(
+                {
+                  name: '👤 Buyer',
+                  value: `<@${message.author.id}> (${message.author.username})`,
+                  inline: true,
+                },
+                {
+                  name: '🛍️ Item',
+                  value: `**${item.name}**`,
+                  inline: true,
+                },
+                {
+                  name: '💎 Price',
+                  value: `**${item.price}** gems`,
+                  inline: true,
+                },
+                {
+                  name: '🏷️ Guild',
+                  value: message.guild ? message.guild.name : 'DM',
+                  inline: true,
+                }
+              )
+              .setFooter({ text: `Purchase ID: ${message.author.id}` })
+              .setTimestamp(),
+          ],
+        });
+      } catch (err) {
+        logError('redeem - owner notification', err);
+      }
     }
 
 
