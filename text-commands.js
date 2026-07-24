@@ -630,7 +630,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               },
               {
                 name: '💰 Economy Commands',
-                value: '`!bank [@user]` - Check gem balance\n`!shop` - Open the shop\n`!addgem @user <amount>` - Add gems\n`!removegem @user <amount>` - Remove gems',
+                value: '`!bank [@user]` - Check gem balance\n`!gemleaderboard` - View top 15 players by gems\n`!shop` - Open the shop\n`!addgem @user <amount>` - Add gems\n`!removegem @user <amount>` - Remove gems',
                 inline: false,
               },
               {
