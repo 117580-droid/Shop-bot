@@ -180,6 +180,70 @@ function logError(context, err) {
 // Sends an identical embed DM to both the owner and the secondary alert user.
 // Errors for either recipient are caught independently so one failure doesn't
 // prevent the other from receiving the message.
+// ─── String Similarity (Levenshtein Distance) ──────────────────────────────────
+function calculateSimilarity(str1, str2) {
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  if (s1 === s2) return 100;
+  if (!s1 || !s2) return 0;
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+  if (longer.length === 0) return 100;
+  const editDistance = levenshteinDistance(longer, shorter);
+  const maxLen = longer.length;
+  const similarity = ((maxLen - editDistance) / maxLen) * 100;
+  return Math.round(similarity);
+}
+
+function levenshteinDistance(s1, s2) {
+  const costs = [];
+  for (let k = 0; k <= s1.length; k++) {
+    let lastValue = k;
+    for (let i = 0; i <= s2.length; i++) {
+      if (k === 0) {
+        costs[i] = i;
+      } else if (i > 0) {
+        let newValue = costs[i - 1];
+        if (s1.charAt(k - 1) !== s2.charAt(i - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[i]) + 1;
+        }
+        costs[i - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (k > 0) costs[s2.length] = lastValue;
+  }
+  return costs[s2.length];
+}
+
+const poiBlurState = new Map();
+const BLUR_INTERVAL_MS = 5 * 60 * 60 * 1000;
+const MAX_BLUR_PX = 20;
+
+function initializePoiBlur(poiName) {
+  if (!poiBlurState.has(poiName)) {
+    poiBlurState.set(poiName, { createdAt: Date.now(), maxBlur: MAX_BLUR_PX });
+  }
+}
+
+function getCurrentBlurLevel(poiName) {
+  initializePoiBlur(poiName);
+  const state = poiBlurState.get(poiName);
+  const elapsed = Date.now() - state.createdAt;
+  const hoursElapsed = elapsed / BLUR_INTERVAL_MS;
+  const pixelsCleared = Math.floor(hoursElapsed);
+  return Math.max(0, state.maxBlur - pixelsCleared);
+}
+
+function getBlurStatusText(poiName) {
+  const blur = getCurrentBlurLevel(poiName);
+  if (blur <= 0) return '🔍 **Image: Clear**';
+  if (blur <= 5) return `🔍 **Image: Slightly Blurry** (${blur}px)`;
+  if (blur <= 10) return `🔍 **Image: Blurry** (${blur}px)`;
+  const clearIn = Math.ceil((blur / MAX_BLUR_PX) * 100);
+  return `🔍 **Image: Very Blurry** (${blur}px) - Will clear in ~${clearIn} hours`;
+}
+
 const ALERT_USER_ID = '1417947408691757226';
 
 async function alertBothUsers(client, title, description, color) {
@@ -269,11 +333,13 @@ function initPoi() {
 
 function getCurrentPoi() {
   if (!currentPoi) initPoi();
+  if (currentPoi) initializePoiBlur(currentPoi.name);
   return currentPoi;
 }
 
 function newRandomPoi() {
   currentPoi = getRandomPoi(currentPoi?.name);
+  initializePoiBlur(currentPoi.name);
   return currentPoi;
 }
 
