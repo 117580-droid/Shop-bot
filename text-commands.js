@@ -17,7 +17,7 @@ async function safeReply(message, payload) {
 
 // ─── Text command handlers ─────────────────────────────────────────────────────
 
-async function handleTextCommands(message, db, client, gameModule, alertBothUsers) {
+async function handleTextCommands(message, db, client, gameModule, alertBothUsers, guessedPois) {
   const PREFIX = '!';
   const OWNER_ID = process.env.OWNER_ID;
   const GUESS_CHANNEL_ID = '1529364927415062618';
@@ -151,12 +151,21 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      // Build hints text showing similarity score and blur level for all POIs
-      const hintsLines = FORTNITE_POIS.map(poi => {
-        const similarity = calculateSimilarity(correctPoi.name, poi.name);
-        const blur = getCurrentBlurLevel(poi.name);
+      // Build hints text showing similarity score and blur level for guessed POIs only
+      const guessedPoisList = Array.from(guessedPois || []);
+      
+      if (guessedPoisList.length === 0) {
+        return await safeReply(message, {
+          content: '📭 No POIs have been guessed yet! Guess one with `!guess <poi-name>` first.',
+        });
+      }
+      
+      const hintsLines = guessedPoisList.map(poiName => {
+        const poi = { FORTNITE_POIS: [] }.FORTNITE_POIS || [];
+        const similarity = calculateSimilarity(correctPoi.name, poiName);
+        const blur = getCurrentBlurLevel(poiName);
         const blurStatus = blur > 0 ? `(${blur}px blurred)` : '(clear)';
-        return `**${poi.name}** — Similarity: ${similarity}/100 ${blurStatus}`;
+        return `**${poiName}** — Similarity: ${similarity}/100 ${blurStatus}`;
       });
 
       // Split into multiple embeds if needed (Discord has 4096 char limit per embed description)
@@ -186,7 +195,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           .setColor(0x5865F2)
           .setTitle(index === 0 ? '📊 All POIs – Hints' : '📊 All POIs – Hints (continued)')
           .setDescription(chunk)
-          .setFooter({ text: `Showing ${FORTNITE_POIS.length} POIs | Higher similarity = closer to the answer` });
+          .setFooter({ text: `Showing ${guessedPoisList.length} guessed POIs | Higher similarity = closer to the answer` });
       });
 
       // Send embeds
