@@ -17,7 +17,7 @@ async function safeReply(message, payload) {
 
 // ─── Text command handlers ─────────────────────────────────────────────────────
 
-async function handleTextCommands(message, db, client, gameModule, alertBothUsers) {
+async function handleTextCommands(message, db, client, gameModule, alertBothUsers, guessedPois) {
   const PREFIX = '!';
   const OWNER_ID = process.env.OWNER_ID;
   const GUESS_CHANNEL_ID = '1529364927415062618';
@@ -38,7 +38,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
             .addFields(
               { name: '🎮 Guess Game', value: 'Find Madmotherflupa on the Fortnite map!', inline: false },
               { name: '`!guess <poi>`', value: `Guess a POI location. Only works in <#${GUESS_CHANNEL_ID}>. 120-minute cooldown on wrong guesses.`, inline: false },
-              { name: '`!hints`', value: `Show all POIs with similarity scores and blur levels. Only works in <#${GUESS_CHANNEL_ID}>.`, inline: false },
+              { name: '`!hints`', value: `Show the pixelated location and all guessed POIs with similarity scores. Only works in <#${GUESS_CHANNEL_ID}>.`, inline: false },
               { name: '', value: '', inline: false },
               { name: '📊 Slash Commands', value: 'Use `/currentpoi` to see game info and more details!', inline: false }
             )
@@ -151,12 +151,20 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      // Build hints text showing similarity score and blur level for all POIs
-      const hintsLines = FORTNITE_POIS.map(poi => {
-        const similarity = calculateSimilarity(correctPoi.name, poi.name);
-        const blur = getCurrentBlurLevel(poi.name);
+      // Build hints text showing similarity score and blur level for guessed POIs only
+      const guessedPoisList = Array.from(guessedPois || []);
+      
+      if (guessedPoisList.length === 0) {
+        return await safeReply(message, {
+          content: '📭 No POIs have been guessed yet! Guess one with `!guess <poi-name>` first.',
+        });
+      }
+      
+      const hintsLines = guessedPoisList.map(poiName => {
+        const similarity = calculateSimilarity(correctPoi.name, poiName);
+        const blur = getCurrentBlurLevel(poiName);
         const blurStatus = blur > 0 ? `(${blur}px blurred)` : '(clear)';
-        return `**${poi.name}** — Similarity: ${similarity}/100 ${blurStatus}`;
+        return `**${poiName}** — Similarity: ${similarity}/100 ${blurStatus}`;
       });
 
       // Split into multiple embeds if needed (Discord has 4096 char limit per embed description)
@@ -180,13 +188,20 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         embedChunks.push(currentChunk.join('\n'));
       }
 
-      // Build embeds
+      // Build embeds - first embed includes the blurred image
       const embeds = embedChunks.map((chunk, index) => {
-        return new EmbedBuilder()
+        const embed = new EmbedBuilder()
           .setColor(0x5865F2)
-          .setTitle(index === 0 ? '📊 All POIs – Hints' : '📊 All POIs – Hints (continued)')
+          .setTitle(index === 0 ? '🔍 Pixelated Location' : '📊 Guessed POIs – Hints (continued)')
           .setDescription(chunk)
-          .setFooter({ text: `Showing ${FORTNITE_POIS.length} POIs | Higher similarity = closer to the answer` });
+          .setFooter({ text: `Showing ${guessedPoisList.length} guessed POIs | Higher similarity = closer to the answer` });
+        
+        // Add the blurred image to the first embed
+        if (index === 0) {
+          embed.setImage(correctPoi.image);
+        }
+        
+        return embed;
       });
 
       // Send embeds

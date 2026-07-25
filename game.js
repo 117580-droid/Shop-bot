@@ -286,6 +286,7 @@ async function safeReply(interaction, payload) {
 
 // ─── Game State ───────────────────────────────────────────────────────────────
 let currentPoi = null;
+const guessedPois = new Set(); // Track POI names that have been guessed
 const userCooldowns = new Map();
 
 // ─── Item Game State ──────────────────────────────────────────────────────────
@@ -729,6 +730,7 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
       await interaction.deferReply();
 
       if (guess.toLowerCase() === poi.name.toLowerCase()) {
+        guessedPois.add(currentPoi.name);
         // ✅ Correct! — run the wheel animation landing on the winning POI.
         updateBalance(user.id, 1);
         setCooldown(user.id);
@@ -1229,4 +1231,5 @@ async function sendDailyHints(client) {
   }
 }
 
-module.exports = { commands, handleGame, getCurrentPoi, initPoi, newRandomPoi, currentPoi, userCooldowns, checkCooldowns, sendDailyHints, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS, alertBothUsers, calculateSimilarity, getCurrentBlurLevel };
+module.exports = {
+  guessedPois, commands, handleGame, getCurrentPoi, initPoi, newRandomPoi, currentPoi, userCooldowns, checkCooldowns, sendDailyHints, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS, alertBothUsers, calculateSimilarity, getCurrentBlurLevel };

@@ -728,7 +728,7 @@ client.on('messageCreate', async (message) => {
   await handleXp(message, db, client);
 
   // Handle text commands with ! prefix
-  await handleTextCommands(message, db, client, gameModule, alertBothUsers);
+  await handleTextCommands(message, db, client, gameModule, alertBothUsers, gameModule.guessedPois);
 });
 
 client.on('messageReactionAdd', async (reaction, user) => {
