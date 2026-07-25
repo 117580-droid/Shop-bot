@@ -9,6 +9,13 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const REDIRECT_URI = 'https://coin-shop-hub-production.up.railway.app/callback';
 
+// Twitch API credentials
+const TWITCH_CLIENT_ID = process.env.CLIENT_ID; // Same as Discord CLIENT_ID for this bot
+const TWITCH_ACCESS_TOKEN = process.env.TWITCH_ACCESS_TOKEN; // You'll need to set this
+const TWITCH_BROADCASTER_ID = '117580'; // Your Twitch user ID
+const WEBHOOK_CALLBACK_URL = 'https://shop-bot-production-a805.up.railway.app/api/live-webhook';
+const WEBHOOK_SECRET = 'mysecret123';
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
@@ -54,6 +61,69 @@ app.get('/api/balance/:userId', (req, res) => {
     res.json({ balance: row ? row.balance : 0 });
   } catch {
     res.json({ balance: 0 });
+  }
+});
+
+// ─── API: Setup Twitch Live Notification Webhook ────────────────────────────────
+app.post('/api/setup-twitch-webhook', async (req, res) => {
+  try {
+    // Check if token is available
+    if (!TWITCH_ACCESS_TOKEN) {
+      return res.status(500).json({
+        ok: false,
+        error: 'TWITCH_ACCESS_TOKEN is not set in environment variables',
+      });
+    }
+
+    console.log('[Twitch Webhook] Setting up stream.online subscription...');
+
+    const payload = {
+      type: 'stream.online',
+      version: '1',
+      condition: {
+        broadcaster_user_id: TWITCH_BROADCASTER_ID,
+      },
+      transport: {
+        method: 'webhook',
+        callback: WEBHOOK_CALLBACK_URL,
+        secret: WEBHOOK_SECRET,
+      },
+    };
+
+    const response = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TWITCH_ACCESS_TOKEN}`,
+        'Client-ID': TWITCH_CLIENT_ID,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[Twitch Webhook] Error response:', data);
+      return res.status(response.status).json({
+        ok: false,
+        error: data.message || 'Failed to set up Twitch webhook',
+        details: data,
+      });
+    }
+
+    console.log('[Twitch Webhook] Success! Subscription created:', data);
+
+    res.json({
+      ok: true,
+      message: 'Twitch webhook set up successfully!',
+      subscription: data.data?.[0] || null,
+    });
+  } catch (err) {
+    console.error('[Twitch Webhook] Setup error:', err);
+    res.status(500).json({
+      ok: false,
+      error: err.message || 'An error occurred while setting up the webhook',
+    });
   }
 });
 
