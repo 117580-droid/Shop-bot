@@ -420,6 +420,53 @@ const callbackServer = http.createServer((req, res) => {
   }
 
 
+  // Live notification webhook — Twitch/TikTok POST here when the streamer
+  // goes live so the bot can ping everyone in the live-notifications channel.
+  if (req.method === 'POST' && req.url === '/api/live-webhook') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { platform, username, title } = JSON.parse(body);
+
+        if (!platform || !username || !title) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Missing platform, username, or title' }));
+          return;
+        }
+
+        log('INFO', `callbackServer: live-webhook — "${username}" is live on ${platform}: "${title}"`);
+
+        try {
+          const LIVE_NOTIFICATIONS_CHANNEL_ID = '1529360722344284220';
+          const channel = await client.channels.fetch(LIVE_NOTIFICATIONS_CHANNEL_ID);
+
+          if (!channel) {
+            log('WARN', `callbackServer: live-webhook — channel ${LIVE_NOTIFICATIONS_CHANNEL_ID} not found`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Channel not found' }));
+            return;
+          }
+
+          await channel.send(`@everyone ${username} is now LIVE on ${platform}! ${title}`);
+          log('INFO', 'callbackServer: live-webhook — notification sent.');
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (sendErr) {
+          logError('callbackServer: live-webhook send error', sendErr);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Failed to send notification' }));
+        }
+      } catch (err) {
+        logError('callbackServer: live-webhook parse error', err);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+      }
+    });
+    return;
+  }
+
   // Skip cooldown endpoint — removes the guess cooldown for a user
   if (req.method === 'POST' && req.url === '/api/skip-cooldown') {
     let body = '';
