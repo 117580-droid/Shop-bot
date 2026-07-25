@@ -661,6 +661,11 @@ client.once('ready', () => {
   (async () => {
     try {
       log('INFO', `Registering ${allCommands.length} slash commands...`);
+      log('INFO', `Game commands: ${gameCommands.map(c => c.name).join(', ')}`);
+      log('INFO', `Clan commands: ${clanCommands.map(c => c.name).join(', ')}`);
+      log('INFO', `Lottery commands: ${lotteryCommands.map(c => c.name).join(', ')}`);
+      log('INFO', `Giveaway commands: ${giveawayCommands.map(c => c.name).join(', ')}`);
+      log('INFO', `Server Rules commands: ${serverRulesCommands.map(c => c.name).join(', ')}`);
       await rest.put(Routes.applicationCommands(CLIENT_ID), { body: allCommands });
       log('INFO', 'Slash commands registered successfully.');
     } catch (err) {
