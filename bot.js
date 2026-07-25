@@ -570,6 +570,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY,
     username TEXT,
+    balance INTEGER DEFAULT 0,
     last_daily_claim TEXT
   );
 
@@ -608,6 +609,28 @@ db.exec(`
 
 initClanTables(db);
 initLotteryTable(db);
+
+// ─── Balance Helper ───────────────────────────────────────────────────────────
+
+/**
+ * Add `amount` coins to a user's balance, creating the user row if it doesn't
+ * already exist. Uses an upsert so a first-time player is initialised with
+ * the correct starting balance rather than throwing on a missing row.
+ *
+ * @param {string} userId  Discord user ID.
+ * @param {number} amount  Coins to add (can be negative to deduct).
+ */
+function updateBalance(userId, amount) {
+  try {
+    db.prepare(`
+      INSERT INTO users (user_id, balance)
+      VALUES (?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET balance = balance + excluded.balance
+    `).run(userId, amount);
+  } catch (err) {
+    logError('updateBalance', err);
+  }
+}
 
 // ─── Game Module ──────────────────────────────────────────────────────────────
 
@@ -656,7 +679,7 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // Game commands
     if (gameCommands.some(cmd => cmd.name === commandName)) {
-      return await handleGame(interaction, db, client, null);
+      return await handleGame(interaction, updateBalance, client, null);
     }
 
     // Clan commands
