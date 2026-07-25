@@ -110,7 +110,8 @@ function buildRulesEmbeds() {
 const commands = [
   new SlashCommandBuilder()
     .setName('server-rules')
-    .setDescription('Post the complete server rules'),
+    .setDescription('Post the complete server rules')
+    .toJSON(),
 ];
 
 // ─── Command handler ──────────────────────────────────────────────────────────
@@ -130,3 +131,4 @@ module.exports = {
   commands,
   handleServerRules,
 };
+
