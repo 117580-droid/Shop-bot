@@ -3,7 +3,8 @@ const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuild
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
-const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS, userCooldowns, alertBothUsers } = require('./game.js');
+const gameJs = require('./game.js');
+const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS, userCooldowns, alertBothUsers } = gameJs;
 const { commands: clanCommands, handleClan, handleLevel, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
@@ -634,7 +635,7 @@ function updateBalance(userId, amount) {
 
 // ─── Game Module ──────────────────────────────────────────────────────────────
 
-const gameModule = { userCooldowns, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS };
+const gameModule = { ...gameJs, userCooldowns, getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS };
 
 // ─── Client Events ────────────────────────────────────────────────────────────
 
