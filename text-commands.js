@@ -8,8 +8,7 @@ function logError(context, err) {
 
 // ─── Safe reply helper ─────────────────────────────────────────────────────────
 async function safeReply(message, payload) {
-  try {
-    await message.reply(payload);
+  try {\n    await message.reply(payload);
   } catch (err) {
     logError('safeReply', err);
   }
@@ -38,7 +37,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
             .addFields(
               { name: '🎮 Guess Game', value: 'Find Madmotherflupa on the Fortnite map!', inline: false },
               { name: '`!guess <poi>`', value: `Guess a POI location. Only works in <#${GUESS_CHANNEL_ID}>. 120-minute cooldown on wrong guesses.`, inline: false },
-              { name: '`!hints`', value: `Show all POIs with similarity scores and blur levels. Only works in <#${GUESS_CHANNEL_ID}>.`, inline: false },
+              { name: '`!hints`', value: `Show the pixelated location and all guessed POIs with similarity scores. Only works in <#${GUESS_CHANNEL_ID}>.`, inline: false },
               { name: '', value: '', inline: false },
               { name: '📊 Slash Commands', value: 'Use `/currentpoi` to see game info and more details!', inline: false }
             )
@@ -161,7 +160,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       }
       
       const hintsLines = guessedPoisList.map(poiName => {
-        const poi = { FORTNITE_POIS: [] }.FORTNITE_POIS || [];
         const similarity = calculateSimilarity(correctPoi.name, poiName);
         const blur = getCurrentBlurLevel(poiName);
         const blurStatus = blur > 0 ? `(${blur}px blurred)` : '(clear)';
@@ -189,13 +187,20 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         embedChunks.push(currentChunk.join('\n'));
       }
 
-      // Build embeds
+      // Build embeds - first embed includes the blurred image
       const embeds = embedChunks.map((chunk, index) => {
-        return new EmbedBuilder()
+        const embed = new EmbedBuilder()
           .setColor(0x5865F2)
-          .setTitle(index === 0 ? '📊 All POIs – Hints' : '📊 All POIs – Hints (continued)')
+          .setTitle(index === 0 ? '🔍 Pixelated Location' : '📊 Guessed POIs – Hints (continued)')
           .setDescription(chunk)
           .setFooter({ text: `Showing ${guessedPoisList.length} guessed POIs | Higher similarity = closer to the answer` });
+        
+        // Add the blurred image to the first embed
+        if (index === 0) {
+          embed.setImage(correctPoi.image);
+        }
+        
+        return embed;
       });
 
       // Send embeds
