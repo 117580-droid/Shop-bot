@@ -1,1 +1,184 @@
-const { EmbedBuilder } = require('discord.js');\n\n// ─── Logging ──────────────────────────────────────────────────────────────────\nfunction logError(context, err) {\n  console.error(`[ERROR] text-commands/${context}: ${err?.message ?? err}`);\n  if (err?.stack) console.error(err.stack);\n}\n\n// ─── Safe reply helper ─────────────────────────────────────────────────────────\nasync function safeReply(message, payload) {\n  try {\n    await message.reply(payload);\n  } catch (err) {\n    logError('safeReply', err);\n  }\n}\n\n// ─── Text command handlers ─────────────────────────────────────────────────────\n\nasync function handleTextCommands(message, db, client, gameModule, alertBothUsers) {\n  const PREFIX = '!';\n  const OWNER_ID = process.env.OWNER_ID;\n  \n  if (!message.content.startsWith(PREFIX)) return;\n\n  const args = message.content.slice(PREFIX.length).trim().split(/\\s+/);\n  const command = args[0].toLowerCase();\n\n  try {\n    // ── !guess ─────────────────────────────────────────────────────────────────\n    if (command === 'guess') {\n      const GUESS_CHANNEL_ID = '1529364927415062618';\n      if (message.channelId !== GUESS_CHANNEL_ID) {\n        return await safeReply(message, {\n          content: `❌ You can only use !guess in <#${GUESS_CHANNEL_ID}>`,\n        });\n      }\n\n      const { getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS } = gameModule;\n      \n      // Safety check: ensure all required functions exist\n      if (!getCurrentPoi || !newRandomPoi || !getCooldownRemaining || !setCooldown || !formatMs || !FORTNITE_POIS) {\n        logError('guess', 'Missing required gameModule properties');\n        return await safeReply(message, {\n          content: '❌ Game module not properly initialized. Please try again later.',\n        });\n      }\n      \n      const poi = getCurrentPoi();\n      \n      if (!poi) {\n        logError('guess', 'getCurrentPoi() returned null/undefined');\n        return await safeReply(message, {\n          content: '❌ Could not get current POI. Please try again later.',\n        });\n      }\n      \n      const { author: user } = message;\n\n      const remaining = getCooldownRemaining(user.id);\n      if (remaining > 0) {\n        return await safeReply(message, {\n          content: `⏳ You guessed recently! You can guess again in **${formatMs(remaining)}**.`,\n        });\n      }\n\n      const guess = args.slice(1).join(' ').trim();\n      if (!guess) {\n        return await safeReply(message, {\n          content: '❌ Please provide a POI name to guess.\\nUsage: `!guess <poi-name>`',\n        });\n      }\n\n      const validPois = FORTNITE_POIS.map(p => p.name.toLowerCase());\n      if (!validPois.includes(guess.toLowerCase())) {\n        return await safeReply(message, {\n          content: `❌ **${guess}** is not a valid POI name. Please guess a real Fortnite location.`,\n        });\n      }\n\n      if (guess.toLowerCase() === poi.name.toLowerCase()) {\n        setCooldown(user.id);\n        const newPoi = newRandomPoi();\n\n        await alertBothUsers(\n          client,\n          '🎯 Someone Found Madmotherflupa!',\n          `**${user.username}** found Madmotherflupa at **${poi.name}**!\\nNew hiding spot: **${newPoi.name}**`,\n          0x57F287,\n        );\n\n        return await safeReply(message, {\n          embeds: [\n            new EmbedBuilder()\n              .setColor(0x57F287)\n              .setTitle('🎉 Correct!')\n              .setThumbnail(poi.image)\n              .setDescription(`You found Madmotherflupa at **${poi.name}**!\\n\\n🎯 New POI: **${newPoi.name}**`)\n              .setFooter({ text: newPoi.name }),\n          ],\n        });\n      } else {\n        return await safeReply(message, {\n          content: `❌ Wrong! Madmotherflupa is hiding at **${poi.name}**, not **${guess}**.`,\n        });\n      }\n    }\n\n    // ── !hints ─────────────────────────────────────────────────────────────────\n    if (command === 'hints') {\n      const { getCurrentPoi, FORTNITE_POIS, calculateSimilarity, getCurrentBlurLevel } = gameModule;\n      \n      // Safety check\n      if (!getCurrentPoi || !FORTNITE_POIS || !calculateSimilarity || !getCurrentBlurLevel) {\n        logError('hints', 'Missing required gameModule properties');\n        return await safeReply(message, {\n          content: '❌ Game module not properly initialized. Please try again later.',\n        });\n      }\n\n      const correctPoi = getCurrentPoi();\n      if (!correctPoi) {\n        logError('hints', 'getCurrentPoi() returned null/undefined');\n        return await safeReply(message, {\n          content: '❌ Could not get current POI. Please try again later.',\n        });\n      }\n\n      // Build hints text showing similarity score and blur level for all POIs\n      const hintsLines = FORTNITE_POIS.map(poi => {\n        const similarity = calculateSimilarity(correctPoi.name, poi.name);\n        const blur = getCurrentBlurLevel(poi.name);\n        const blurStatus = blur > 0 ? `(${blur}px blurred)` : '(clear)';\n        return `**${poi.name}** — Similarity: ${similarity}/100 ${blurStatus}`;\n      });\n\n      // Split into multiple embeds if needed (Discord has 4096 char limit per embed description)\n      const embedChunks = [];\n      let currentChunk = [];\n      let currentLength = 0;\n      const maxLength = 4000;\n\n      for (const line of hintsLines) {\n        const lineLength = line.length + 1; // +1 for newline\n        if (currentLength + lineLength > maxLength && currentChunk.length > 0) {\n          embedChunks.push(currentChunk.join('\\n'));\n          currentChunk = [line];\n          currentLength = lineLength;\n        } else {\n          currentChunk.push(line);\n          currentLength += lineLength;\n        }\n      }\n      if (currentChunk.length > 0) {\n        embedChunks.push(currentChunk.join('\\n'));\n      }\n\n      // Build embeds\n      const embeds = embedChunks.map((chunk, index) => {\n        return new EmbedBuilder()\n          .setColor(0x5865F2)\n          .setTitle(index === 0 ? '📊 All POIs – Hints' : '📊 All POIs – Hints (continued)')\n          .setDescription(chunk)\n          .setFooter({ text: `Showing ${FORTNITE_POIS.length} POIs | Higher similarity = closer to the answer` });\n      });\n\n      // Send embeds\n      for (const embed of embeds) {\n        await safeReply(message, { embeds: [embed] });\n      }\n    }\n  } catch (err) {\n    logError(`handleTextCommands [${command}]`, err);\n  }\n}\n\nmodule.exports = { handleTextCommands };\n
+const { EmbedBuilder } = require('discord.js');
+
+// ─── Logging ──────────────────────────────────────────────────────────────────
+function logError(context, err) {
+  console.error(`[ERROR] text-commands/${context}: ${err?.message ?? err}`);
+  if (err?.stack) console.error(err.stack);
+}
+
+// ─── Safe reply helper ─────────────────────────────────────────────────────────
+async function safeReply(message, payload) {
+  try {
+    await message.reply(payload);
+  } catch (err) {
+    logError('safeReply', err);
+  }
+}
+
+// ─── Text command handlers ─────────────────────────────────────────────────────
+
+async function handleTextCommands(message, db, client, gameModule, alertBothUsers) {
+  const PREFIX = '!';
+  const OWNER_ID = process.env.OWNER_ID;
+  const GUESS_CHANNEL_ID = '1529364927415062618';
+  
+  if (!message.content.startsWith(PREFIX)) return;
+
+  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+  const command = args[0].toLowerCase();
+
+  try {
+    // ── !guess ─────────────────────────────────────────────────────────────────
+    if (command === 'guess') {
+      if (message.channelId !== GUESS_CHANNEL_ID) {
+        return await safeReply(message, {
+          content: `❌ You can only use !guess in <#${GUESS_CHANNEL_ID}>`,
+        });
+      }
+
+      const { getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS } = gameModule;
+      
+      // Safety check: ensure all required functions exist
+      if (!getCurrentPoi || !newRandomPoi || !getCooldownRemaining || !setCooldown || !formatMs || !FORTNITE_POIS) {
+        logError('guess', 'Missing required gameModule properties');
+        return await safeReply(message, {
+          content: '❌ Game module not properly initialized. Please try again later.',
+        });
+      }
+      
+      const poi = getCurrentPoi();
+      
+      if (!poi) {
+        logError('guess', 'getCurrentPoi() returned null/undefined');
+        return await safeReply(message, {
+          content: '❌ Could not get current POI. Please try again later.',
+        });
+      }
+      
+      const { author: user } = message;
+
+      const remaining = getCooldownRemaining(user.id);
+      if (remaining > 0) {
+        return await safeReply(message, {
+          content: `⏳ You guessed recently! You can guess again in **${formatMs(remaining)}**.`,
+        });
+      }
+
+      const guess = args.slice(1).join(' ').trim();
+      if (!guess) {
+        return await safeReply(message, {
+          content: '❌ Please provide a POI name to guess.\nUsage: `!guess <poi-name>`',
+        });
+      }
+
+      const validPois = FORTNITE_POIS.map(p => p.name.toLowerCase());
+      if (!validPois.includes(guess.toLowerCase())) {
+        return await safeReply(message, {
+          content: `❌ **${guess}** is not a valid POI name. Please guess a real Fortnite location.`,
+        });
+      }
+
+      if (guess.toLowerCase() === poi.name.toLowerCase()) {
+        setCooldown(user.id);
+        const newPoi = newRandomPoi();
+
+        await alertBothUsers(
+          client,
+          '🎯 Someone Found Madmotherflupa!',
+          `**${user.username}** found Madmotherflupa at **${poi.name}**!\nNew hiding spot: **${newPoi.name}**`,
+          0x57F287,
+        );
+
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('🎉 Correct!')
+              .setThumbnail(poi.image)
+              .setDescription(`You found Madmotherflupa at **${poi.name}**!\n\n🎯 New POI: **${newPoi.name}**`)
+              .setFooter({ text: newPoi.name }),
+          ],
+        });
+      } else {
+        return await safeReply(message, {
+          content: `❌ Wrong! Madmotherflupa is hiding at **${poi.name}**, not **${guess}**.`,
+        });
+      }
+    }
+
+    // ── !hints ─────────────────────────────────────────────────────────────────
+    if (command === 'hints') {
+      if (message.channelId !== GUESS_CHANNEL_ID) {
+        return await safeReply(message, {
+          content: `❌ You can only use !hints in <#${GUESS_CHANNEL_ID}>`,
+        });
+      }
+
+      const { getCurrentPoi, FORTNITE_POIS, calculateSimilarity, getCurrentBlurLevel } = gameModule;
+      
+      // Safety check
+      if (!getCurrentPoi || !FORTNITE_POIS || !calculateSimilarity || !getCurrentBlurLevel) {
+        logError('hints', 'Missing required gameModule properties');
+        return await safeReply(message, {
+          content: '❌ Game module not properly initialized. Please try again later.',
+        });
+      }
+
+      const correctPoi = getCurrentPoi();
+      if (!correctPoi) {
+        logError('hints', 'getCurrentPoi() returned null/undefined');
+        return await safeReply(message, {
+          content: '❌ Could not get current POI. Please try again later.',
+        });
+      }
+
+      // Build hints text showing similarity score and blur level for all POIs
+      const hintsLines = FORTNITE_POIS.map(poi => {
+        const similarity = calculateSimilarity(correctPoi.name, poi.name);
+        const blur = getCurrentBlurLevel(poi.name);
+        const blurStatus = blur > 0 ? `(${blur}px blurred)` : '(clear)';
+        return `**${poi.name}** — Similarity: ${similarity}/100 ${blurStatus}`;
+      });
+
+      // Split into multiple embeds if needed (Discord has 4096 char limit per embed description)
+      const embedChunks = [];
+      let currentChunk = [];
+      let currentLength = 0;
+      const maxLength = 4000;
+
+      for (const line of hintsLines) {
+        const lineLength = line.length + 1; // +1 for newline
+        if (currentLength + lineLength > maxLength && currentChunk.length > 0) {
+          embedChunks.push(currentChunk.join('\n'));
+          currentChunk = [line];
+          currentLength = lineLength;
+        } else {
+          currentChunk.push(line);
+          currentLength += lineLength;
+        }
+      }
+      if (currentChunk.length > 0) {
+        embedChunks.push(currentChunk.join('\n'));
+      }
+
+      // Build embeds
+      const embeds = embedChunks.map((chunk, index) => {
+        return new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle(index === 0 ? '📊 All POIs – Hints' : '📊 All POIs – Hints (continued)')
+          .setDescription(chunk)
+          .setFooter({ text: `Showing ${FORTNITE_POIS.length} POIs | Higher similarity = closer to the answer` });
+      });
+
+      // Send embeds
+      for (const embed of embeds) {
+        await safeReply(message, { embeds: [embed] });
+      }
+    }
+  } catch (err) {
+    logError(`handleTextCommands [${command}]`, err);
+  }
+}
+
+module.exports = { handleTextCommands };
+
