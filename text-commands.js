@@ -38,7 +38,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
       const { getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS } = gameModule;
       const poi = getCurrentPoi();
-      const { user } = message;
+      const { author: user } = message;
 
       const remaining = getCooldownRemaining(user.id);
       if (remaining > 0) {
