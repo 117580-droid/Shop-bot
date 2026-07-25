@@ -8,7 +8,8 @@ function logError(context, err) {
 
 // ─── Safe reply helper ─────────────────────────────────────────────────────────
 async function safeReply(message, payload) {
-  try {\n    await message.reply(payload);
+  try {
+    await message.reply(payload);
   } catch (err) {
     logError('safeReply', err);
   }
