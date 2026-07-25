@@ -8,7 +8,8 @@ function logError(context, err) {
 
 // ─── Safe reply helper ─────────────────────────────────────────────────────────
 async function safeReply(message, payload) {
-  try {\n    await message.reply(payload);
+  try {
+    await message.reply(payload);
   } catch (err) {
     logError('safeReply', err);
   }
@@ -27,7 +28,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
   const command = args[0].toLowerCase();
 
   try {
-    // ── !help ──────────────────────────────────────────────────────────────────
     if (command === 'help') {
       return await safeReply(message, {
         embeds: [
@@ -46,7 +46,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-    // ── !guess ─────────────────────────────────────────────────────────────────
     if (command === 'guess') {
       if (message.channelId !== GUESS_CHANNEL_ID) {
         return await safeReply(message, {
@@ -56,7 +55,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
       const { getCurrentPoi, newRandomPoi, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS } = gameModule;
       
-      // Safety check: ensure all required functions exist
       if (!getCurrentPoi || !newRandomPoi || !getCooldownRemaining || !setCooldown || !formatMs || !FORTNITE_POIS) {
         logError('guess', 'Missing required gameModule properties');
         return await safeReply(message, {
@@ -124,7 +122,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       }
     }
 
-    // ── !hints ─────────────────────────────────────────────────────────────────
     if (command === 'hints') {
       if (message.channelId !== GUESS_CHANNEL_ID) {
         return await safeReply(message, {
@@ -134,7 +131,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
       const { getCurrentPoi, FORTNITE_POIS, calculateSimilarity, getCurrentBlurLevel } = gameModule;
       
-      // Safety check
       if (!getCurrentPoi || !FORTNITE_POIS || !calculateSimilarity || !getCurrentBlurLevel) {
         logError('hints', 'Missing required gameModule properties');
         return await safeReply(message, {
@@ -150,7 +146,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      // Build hints text showing similarity score and blur level for guessed POIs only
       const guessedPoisList = Array.from(guessedPois || []);
       
       if (guessedPoisList.length === 0) {
@@ -166,14 +161,13 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         return `**${poiName}** — Similarity: ${similarity}/100 ${blurStatus}`;
       });
 
-      // Split into multiple embeds if needed (Discord has 4096 char limit per embed description)
       const embedChunks = [];
       let currentChunk = [];
       let currentLength = 0;
       const maxLength = 4000;
 
       for (const line of hintsLines) {
-        const lineLength = line.length + 1; // +1 for newline
+        const lineLength = line.length + 1;
         if (currentLength + lineLength > maxLength && currentChunk.length > 0) {
           embedChunks.push(currentChunk.join('\n'));
           currentChunk = [line];
@@ -187,7 +181,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         embedChunks.push(currentChunk.join('\n'));
       }
 
-      // Build embeds - first embed includes the blurred image
       const embeds = embedChunks.map((chunk, index) => {
         const embed = new EmbedBuilder()
           .setColor(0x5865F2)
@@ -195,7 +188,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           .setDescription(chunk)
           .setFooter({ text: `Showing ${guessedPoisList.length} guessed POIs | Higher similarity = closer to the answer` });
         
-        // Add the blurred image to the first embed
         if (index === 0) {
           embed.setImage(correctPoi.image);
         }
@@ -203,7 +195,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         return embed;
       });
 
-      // Send embeds
       for (const embed of embeds) {
         await safeReply(message, { embeds: [embed] });
       }
