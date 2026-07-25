@@ -620,6 +620,10 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
     // /guess ───────────────────────────────────────────────────────────────────
     if (commandName === 'guess') {
       const poi = getCurrentPoi();
+      if (!poi || !poi.name) {
+        console.error(`[ERROR] poi is null/undefined, FORTNITE_POIS.length=${FORTNITE_POIS.length}`);
+        return await safeReply(interaction, { content: "❌ Game error: POI not initialized.", ephemeral: true });
+      }
       // Check if command is being used in the correct channel
       const GUESS_CHANNEL_ID = '1529364927415062618';
       if (interaction.channelId !== GUESS_CHANNEL_ID) {
