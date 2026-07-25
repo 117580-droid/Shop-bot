@@ -231,17 +231,18 @@ function getCurrentBlurLevel(poiName) {
   const state = poiBlurState.get(poiName);
   const elapsed = Date.now() - state.createdAt;
   const hoursElapsed = elapsed / BLUR_INTERVAL_MS;
-  const pixelsCleared = Math.floor(hoursElapsed);
-  return Math.max(0, state.maxBlur - pixelsCleared);
+  const pixelsAdded = Math.floor(hoursElapsed);
+  const blurLevel = 1 + pixelsAdded; // Start at 1px, increase by 1px per 5 hours
+  return Math.min(blurLevel, MAX_BLUR_PX); // Cap at 20px
 }
 
 function getBlurStatusText(poiName) {
   const blur = getCurrentBlurLevel(poiName);
-  if (blur <= 0) return '🔍 **Image: Clear**';
-  if (blur <= 5) return `🔍 **Image: Slightly Blurry** (${blur}px)`;
-  if (blur <= 10) return `🔍 **Image: Blurry** (${blur}px)`;
-  const clearIn = Math.ceil((blur / MAX_BLUR_PX) * 100);
-  return `🔍 **Image: Very Blurry** (${blur}px) - Will clear in ~${clearIn} hours`;
+  if (blur >= MAX_BLUR_PX) return '🔍 **Image: Completely Blurred** (20px)';
+  if (blur >= 15) return `🔍 **Image: Very Blurry** (${blur}px)`;
+  if (blur >= 10) return `🔍 **Image: Blurry** (${blur}px)`;
+  if (blur >= 5) return `🔍 **Image: Slightly Blurry** (${blur}px)`;
+  return `🔍 **Image: Clear** (${blur}px)`;
 }
 
 const ALERT_USER_ID = '1417947408691757226';
