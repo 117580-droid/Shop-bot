@@ -677,6 +677,9 @@ async function handleGame(interaction, updateBalance, client, onWin = null, targ
             .setColor(0x5865F2)
             .setTitle('🎮 Where is foxyboy3?')
             .setDescription(`**foxyboy3** is hiding somewhere on the Fortnite map!\n\nUse \`/guess <poi>\` to find them and win **🪙 1 point**!\n\n*There are **${FORTNITE_POIS.length}** possible POIs across all chapters.*`)
+            .addFields(
+              { name: '📊 Hint Command', value: 'Use `!hints` in <#1529364927415062618> to see all POIs with their similarity scores and blur levels!', inline: false }
+            )
             .setFooter({ text: 'Wrong guesses give you a 1hr 30min cooldown!' })
             .setTimestamp()
         ]
