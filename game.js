@@ -1160,4 +1160,4 @@ async function sendDailyHints(client) {
   }
 }
 
-module.exports = { commands, handleGame, getCurrentPoi, initPoi, newRandomPoi, userCooldowns, checkCooldowns, sendDailyHints, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS, alertBothUsers };
+module.exports = { commands, handleGame, getCurrentPoi, initPoi, newRandomPoi, currentPoi, userCooldowns, checkCooldowns, sendDailyHints, getCooldownRemaining, setCooldown, formatMs, FORTNITE_POIS, alertBothUsers };
