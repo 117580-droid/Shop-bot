@@ -28,6 +28,25 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
   const command = args[0].toLowerCase();
 
   try {
+    // ── !help ──────────────────────────────────────────────────────────────────
+    if (command === 'help') {
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('📖 Available Commands')
+            .addFields(
+              { name: '🎮 Guess Game', value: 'Find Madmotherflupa on the Fortnite map!', inline: false },
+              { name: '`!guess <poi>`', value: `Guess a POI location. Only works in <#${GUESS_CHANNEL_ID}>. 120-minute cooldown on wrong guesses.`, inline: false },
+              { name: '`!hints`', value: `Show all POIs with similarity scores and blur levels. Only works in <#${GUESS_CHANNEL_ID}>.`, inline: false },
+              { name: '', value: '', inline: false },
+              { name: '📊 Slash Commands', value: 'Use `/currentpoi` to see game info and more details!', inline: false }
+            )
+            .setFooter({ text: 'Use !help to see this message again' })
+        ]
+      });
+    }
+
     // ── !guess ─────────────────────────────────────────────────────────────────
     if (command === 'guess') {
       if (message.channelId !== GUESS_CHANNEL_ID) {
