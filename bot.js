@@ -7,6 +7,7 @@ const { commands: gameCommands, handleGame, checkCooldowns, sendDailyHints, getC
 const { commands: clanCommands, handleClan, handleLevel, handleXp, initClanTables } = require('./clan.js');
 const { commands: lotteryCommands, handleLottery, initLotteryTable, addToLottery, getLotteryParticipants } = require('./lottery.js');
 const { commands: giveawayCommands, handleGiveaway, handleGiveawayReaction } = require('./giveaway.js');
+const { commands: serverRulesCommands, handleServerRules } = require('./server-rules.js');
 const { handleTextCommands } = require('./text-commands.js');
 const { checkMentions, unmuteUser, setMuteExecutor } = require('./antispam.js');
 const { handleMemberJoin, handleMemberRemove } = require('./welcome.js');
@@ -654,6 +655,7 @@ client.once('ready', () => {
     ...clanCommands,
     ...lotteryCommands,
     ...giveawayCommands,
+    ...serverRulesCommands,
   ];
 
   (async () => {
@@ -698,6 +700,11 @@ client.on('interactionCreate', async (interaction) => {
     // Giveaway commands
     if (giveawayCommands.some(cmd => cmd.name === commandName)) {
       return await handleGiveaway(interaction, db);
+    }
+
+    // Server rules command
+    if (serverRulesCommands.some(cmd => cmd.name === commandName)) {
+      return await handleServerRules(interaction);
     }
   } catch (err) {
     logError(`Error handling command ${commandName}`, err);
