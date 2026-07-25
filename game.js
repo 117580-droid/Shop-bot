@@ -519,17 +519,20 @@ const commands = [
   new SlashCommandBuilder()
     .setName('guess')
     .setDescription('Guess which Fortnite POI foxyboy3 is hiding at!')
-    .addStringOption(o => o.setName('poi').setDescription('Your POI guess').setRequired(true)),
+    .addStringOption(o => o.setName('poi').setDescription('Your POI guess').setRequired(true))
+    .toJSON(),
 
   new SlashCommandBuilder()
     .setName('currentpoi')
-    .setDescription('See the current hiding game status'),
+    .setDescription('See the current hiding game status')
+    .toJSON(),
 
   new SlashCommandBuilder()
     .setName('skipcooldown')
     .setDescription("Skip a player's cooldown (Admin only)")
     .addUserOption(o => o.setName('player').setDescription('The player whose cooldown to skip').setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .toJSON(),
 
   // ── Item guessing game ────────────────────────────────────────────────────
   new SlashCommandBuilder()
@@ -546,7 +549,8 @@ const commands = [
         .setDescription('Server name or ID to guess in (DM use only)')
         .setRequired(false)
         .setAutocomplete(true)
-    ),
+    )
+    .toJSON(),
 
   new SlashCommandBuilder()
     .setName('setitem')
@@ -562,7 +566,8 @@ const commands = [
         .setDescription('Server name or ID to set the item in (DM use only)')
         .setRequired(false)
         .setAutocomplete(true)
-    ),
+    )
+    .toJSON(),
 
   new SlashCommandBuilder()
     .setName('additemhint')
@@ -585,7 +590,8 @@ const commands = [
         .setDescription('Channel to post the hint in (defaults to topmost sendable channel)')
         .setRequired(false)
         .setAutocomplete(true)
-    ),
+    )
+    .toJSON(),
 ];
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
