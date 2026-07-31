@@ -11,8 +11,7 @@ function logError(context, err) {
 
 // ─── Safe reply helper ─────────────────────────────────────────────────────────
 async function safeReply(message, payload) {
-  try {
-    await message.reply(payload);
+  try {\n    await message.reply(payload);
   } catch (err) {
     logError('safeReply', err);
   }
@@ -109,7 +108,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               { name: '', value: '', inline: false },
               { name: '💎 Gem & Economy Commands', value: '`!bank [@user]` - Check gem balance\n`!addgem @user <amount>` - Add gems to a user (Owner only)\n`!removegem @user <amount>` - Remove gems from a user (Owner only)\n`!shop` - View shop items\n`!redeem <item name>` - Buy an item from the shop\n`!additem <name> <price>` - Add item to shop (Owner only)\n`!removeitem <name>` - Remove item from shop (Owner only)', inline: false },
               { name: '⭐ Leveling & Stats', value: '`!xp [@user]` - Check XP and level stats\n`!xpleaderboard` - View top 10 players by XP\n`!gemleaderboard` - View top 15 players by gems\n`!addxp @user <amount>` - Add XP to a user (Owner only)\n`!removexp @user <amount>` - Remove XP from a user (Owner only)', inline: false },
-              { name: '📋 Quest Commands', value: '`!addquest` - Create a new quest (Owner only)\n`!endquest` - End the current quest (Owner only)', inline: false },
+              { name: '📋 Quest Commands', value: '`!addquest <title> | <description> | <reward>` - Create a new quest in one command (Owner only)\n`!endquest` - End the current quest (Owner only)', inline: false },
               { name: '🏰 Clan Commands', value: '`!clans` - View server clan leaderboard', inline: false },
               { name: '🎯 Game Commands (Slash)', value: '`/currentpoi` - See current POI and game info\n`/guess <poi>` - Guess via slash command\n`/skipcooldown <player>` - Admin: Skip player cooldown\n`/setitem` - Admin: Set current item\n`/additemhint` - Admin: Add hint to item\n`/guessitem` - Guess an item', inline: false },
               { name: '👥 Clan Commands (Slash)', value: '`/clan create <name>` - Create a clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite user to clan\n`/clan info` - View clan information\n`/level` - Check your level and XP', inline: false },
@@ -425,12 +424,54 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         )
       `).run();
 
-      // Initialize quest creation state
-      questCreationState.set(message.author.id, { step: 1, title: '', description: '', reward: 0 });
+      // Check if user provided arguments with pipe separators
+      const fullContent = message.content.slice(PREFIX.length).trim();
+      const questContent = fullContent.slice(command.length).trim();
+      
+      if (questContent.includes('|')) {
+        // Parse the pipe-separated format: title | description | reward
+        const parts = questContent.split('|').map(p => p.trim());
+        
+        if (parts.length !== 3) {
+          return await safeReply(message, {
+            content: '❌ Invalid format. Use: `!addquest <title> | <description> | <reward>`\nExample: `!addquest Find Treasure | Search the map for treasure | 100`',
+          });
+        }
 
-      return await safeReply(message, {
-        content: '🎯 **Quest Creation Started**\n\nReply with the quest **title** (one line)',
-      });
+        const [title, description, rewardStr] = parts;
+        const reward = parseInt(rewardStr);
+
+        if (!title || !description || isNaN(reward) || reward <= 0) {
+          return await safeReply(message, {
+            content: '❌ Invalid input. Make sure title and description are not empty, and reward is a positive number.',
+          });
+        }
+
+        // Save the quest to database
+        db.prepare('INSERT INTO quests (guild_id, title, description, reward, active) VALUES (?, ?, ?, ?, 1)')
+          .run(message.guild.id, title, description, reward);
+
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('✅ Quest Created!')
+              .addFields(
+                { name: 'Title', value: title, inline: false },
+                { name: 'Description', value: description, inline: false },
+                { name: 'Reward', value: `💰 ${reward} XP`, inline: false }
+              )
+              .setTimestamp(),
+          ],
+        });
+      } else {
+        // Fall back to conversational mode
+        questCreationState.set(message.author.id, { step: 1, title: '', description: '', reward: 0 });
+
+        return await safeReply(message, {
+          content: '🎯 **Quest Creation Started**\n\nReply with the quest **title** (one line)',
+        });
+      }
     }
 
     // ── !endquest ──────────────────────────────────────────────────────────────
