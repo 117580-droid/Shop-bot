@@ -425,9 +425,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         )
       `).run();
 
-      // Check if user provided arguments with pipe separators
-      const fullContent = message.content.slice(PREFIX.length).trim();
-      const questContent = fullContent.slice(command.length).trim();
+      // Get everything after !addquest
+      const questContent = args.slice(1).join(' ');
       
       if (questContent.includes('|')) {
         // Parse the pipe-separated format: title | description | reward
