@@ -48,14 +48,14 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         state.description = input;
         state.step = 3;
         return await safeReply(message, {
-          content: '✅ Description set\n\n💰 Now reply with the **reward amount** (number only)',
+          content: '✅ Description set\n\n💰 Now reply with the **reward amount** (number)',
         });
       } else if (state.step === 3) {
         // Collecting reward
         const reward = parseInt(input);
-        if (isNaN(reward) || reward <= 0) {
+        if (isNaN(reward)) {
           return await safeReply(message, {
-            content: '❌ Invalid reward amount. Please reply with a positive number.',
+            content: '❌ Invalid reward amount. Please reply with a number.',
           });
         }
 
@@ -441,9 +441,9 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         const [title, description, rewardStr] = parts;
         const reward = parseInt(rewardStr);
 
-        if (!title || !description || isNaN(reward) || reward <= 0) {
+        if (!title || !description || isNaN(reward)) {
           return await safeReply(message, {
-            content: '❌ Invalid input. Make sure title and description are not empty, and reward is a positive number.',
+            content: '❌ Invalid input. Make sure title and description are not empty, and reward is a number.',
           });
         }
 
