@@ -1,5 +1,8 @@
 const { EmbedBuilder } = require('discord.js');
 
+// ─── Quest creation state tracker ──────────────────────────────────────────────
+const questCreationState = new Map(); // userId -> { step, title, description, reward }
+
 // ─── Logging ──────────────────────────────────────────────────────────────────
 function logError(context, err) {
   console.error(`[ERROR] text-commands/${context}: ${err?.message ?? err}`);
@@ -28,6 +31,70 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
   const command = args[0].toLowerCase();
 
   try {
+    // ── Check if user is in quest creation flow ────────────────────────────────
+    if (questCreationState.has(message.author.id) && command !== 'addquest') {
+      const state = questCreationState.get(message.author.id);
+      const input = message.content.trim();
+
+      if (state.step === 1) {
+        // Collecting title
+        state.title = input;
+        state.step = 2;
+        return await safeReply(message, {
+          content: '✅ Title set: **' + input + '**\n\n📝 Now reply with the quest **description**',
+        });
+      } else if (state.step === 2) {
+        // Collecting description
+        state.description = input;
+        state.step = 3;
+        return await safeReply(message, {
+          content: '✅ Description set\n\n💰 Now reply with the **reward amount** (number only)',
+        });
+      } else if (state.step === 3) {
+        // Collecting reward
+        const reward = parseInt(input);
+        if (isNaN(reward) || reward <= 0) {
+          return await safeReply(message, {
+            content: '❌ Invalid reward amount. Please reply with a positive number.',
+          });
+        }
+
+        // Create quests table if it doesn't exist
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS quests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            reward INTEGER NOT NULL,
+            active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `).run();
+
+        // Save the quest to database
+        db.prepare('INSERT INTO quests (guild_id, title, description, reward, active) VALUES (?, ?, ?, ?, 1)')
+          .run(message.guild.id, state.title, state.description, reward);
+
+        // Clear the state
+        questCreationState.delete(message.author.id);
+
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('✅ Quest Created!')
+              .addFields(
+                { name: 'Title', value: state.title, inline: false },
+                { name: 'Description', value: state.description, inline: false },
+                { name: 'Reward', value: `💰 ${reward} XP`, inline: false }
+              )
+              .setTimestamp(),
+          ],
+        });
+      }
+    }
+
     // ── !help ──────────────────────────────────────────────────────────────────
     if (command === 'help') {
       return await safeReply(message, {
@@ -358,9 +425,11 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         )
       `).run();
 
+      // Initialize quest creation state
+      questCreationState.set(message.author.id, { step: 1, title: '', description: '', reward: 0 });
+
       return await safeReply(message, {
         content: '🎯 **Quest Creation Started**\n\nReply with the quest **title** (one line)',
-        reply: { messageReference: message.id }
       });
     }
 
