@@ -41,7 +41,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               { name: '`!hints`', value: `Show the pixelated location and all guessed POIs with similarity scores. Only works in <#${GUESS_CHANNEL_ID}>.`, inline: false },
               { name: '', value: '', inline: false },
               { name: '💎 Gem & Economy Commands', value: '`!bank [@user]` - Check gem balance\n`!addgem @user <amount>` - Add gems to a user (Owner only)\n`!removegem @user <amount>` - Remove gems from a user (Owner only)\n`!shop` - View shop items\n`!redeem <item name>` - Buy an item from the shop\n`!additem <name> <price>` - Add item to shop (Owner only)\n`!removeitem <name>` - Remove item from shop (Owner only)', inline: false },
-              { name: '⭐ Leveling & Stats', value: '`!xp [@user]` - Check XP and level stats\n`!xpleaderboard` - View top 10 players by XP\n`!gemleaderboard` - View top 15 players by gems', inline: false },
+              { name: '⭐ Leveling & Stats', value: '`!xp [@user]` - Check XP and level stats\n`!xpleaderboard` - View top 10 players by XP\n`!gemleaderboard` - View top 15 players by gems\n`!addxp @user <amount>` - Add XP to a user (Owner only)\n`!removexp @user <amount>` - Remove XP from a user (Owner only)', inline: false },
+              { name: '📋 Quest Commands', value: '`!addquest` - Create a new quest (Owner only)\n`!endquest` - End the current quest (Owner only)', inline: false },
               { name: '🏰 Clan Commands', value: '`!clans` - View server clan leaderboard', inline: false },
               { name: '🎯 Game Commands (Slash)', value: '`/currentpoi` - See current POI and game info\n`/guess <poi>` - Guess via slash command\n`/skipcooldown <player>` - Admin: Skip player cooldown\n`/setitem` - Admin: Set current item\n`/additemhint` - Admin: Add hint to item\n`/guessitem` - Guess an item', inline: false },
               { name: '👥 Clan Commands (Slash)', value: '`/clan create <name>` - Create a clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite user to clan\n`/clan info` - View clan information\n`/level` - Check your level and XP', inline: false },
@@ -215,6 +216,195 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       for (const embed of embeds) {
         await safeReply(message, { embeds: [embed] });
       }
+    }
+
+    // ── !addxp ────────────────────────────────────────────────────────────────
+    if (command === 'addxp') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      const target = message.mentions.users.first();
+      const amount = parseInt(args[2]);
+
+      if (!target || isNaN(amount) || amount <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!addxp @user <amount>`\nExample: `!addxp @John 100`',
+        });
+      }
+
+      const row = db.prepare('SELECT current_xp, lifetime_xp, level FROM user_xp WHERE user_id = ?').get(target.id);
+      const currentXp = row ? row.current_xp : 0;
+      const lifetimeXp = row ? row.lifetime_xp : 0;
+      const level = row ? row.level : 0;
+      const xpNeededPerLevel = 100;
+
+      let newCurrentXp = currentXp + amount;
+      let newLevel = level;
+      let newLifetimeXp = lifetimeXp + amount;
+
+      // Check for level ups
+      while (newCurrentXp >= xpNeededPerLevel) {
+        newCurrentXp -= xpNeededPerLevel;
+        newLevel += 1;
+      }
+
+      db.prepare('INSERT INTO user_xp (user_id, current_xp, lifetime_xp, level) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET current_xp = ?, lifetime_xp = ?, level = ?')
+        .run(target.id, newCurrentXp, newLifetimeXp, newLevel, newCurrentXp, newLifetimeXp, newLevel);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ XP Added')
+            .setDescription(`Added **${amount}** XP to **${target.username}**`)
+            .addFields(
+              { name: 'Level', value: `${level} → ${newLevel}`, inline: true },
+              { name: 'Lifetime XP', value: `${lifetimeXp.toLocaleString()} → ${newLifetimeXp.toLocaleString()}`, inline: true },
+              { name: 'Progress to Next Level', value: `${newCurrentXp}/${xpNeededPerLevel} XP`, inline: false }
+            )
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !removexp ──────────────────────────────────────────────────────────────
+    if (command === 'removexp') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      const target = message.mentions.users.first();
+      const amount = parseInt(args[2]);
+
+      if (!target || isNaN(amount) || amount <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!removexp @user <amount>`\nExample: `!removexp @John 50`',
+        });
+      }
+
+      const row = db.prepare('SELECT current_xp, lifetime_xp, level FROM user_xp WHERE user_id = ?').get(target.id);
+      const currentXp = row ? row.current_xp : 0;
+      const lifetimeXp = row ? row.lifetime_xp : 0;
+      const level = row ? row.level : 0;
+      const xpNeededPerLevel = 100;
+
+      let newLifetimeXp = Math.max(0, lifetimeXp - amount);
+      let newCurrentXp = currentXp;
+      let newLevel = level;
+      let remaining = amount;
+
+      // Remove from current XP first
+      if (remaining <= newCurrentXp) {
+        newCurrentXp -= remaining;
+        remaining = 0;
+      } else {
+        remaining -= newCurrentXp;
+        newCurrentXp = 0;
+      }
+
+      // Remove from previous levels if needed
+      while (remaining > 0 && newLevel > 0) {
+        newLevel -= 1;
+        remaining -= xpNeededPerLevel;
+      }
+
+      // If we had excess, add it back to current XP
+      if (remaining < 0) {
+        newCurrentXp = Math.abs(remaining);
+      }
+
+      db.prepare('INSERT INTO user_xp (user_id, current_xp, lifetime_xp, level) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET current_xp = ?, lifetime_xp = ?, level = ?')
+        .run(target.id, newCurrentXp, newLifetimeXp, newLevel, newCurrentXp, newLifetimeXp, newLevel);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xED4245)
+            .setTitle('✅ XP Removed')
+            .setDescription(`Removed **${amount}** XP from **${target.username}**`)
+            .addFields(
+              { name: 'Level', value: `${level} → ${newLevel}`, inline: true },
+              { name: 'Lifetime XP', value: `${lifetimeXp.toLocaleString()} → ${newLifetimeXp.toLocaleString()}`, inline: true },
+              { name: 'Progress to Next Level', value: `${newCurrentXp}/${xpNeededPerLevel} XP`, inline: false }
+            )
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !addquest ──────────────────────────────────────────────────────────────
+    if (command === 'addquest') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      // Create quests table if it doesn't exist
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS quests (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL,
+          reward INTEGER NOT NULL,
+          active INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      return await safeReply(message, {
+        content: '🎯 **Quest Creation Started**\n\nReply with the quest **title** (one line)',
+        reply: { messageReference: message.id }
+      });
+    }
+
+    // ── !endquest ──────────────────────────────────────────────────────────────
+    if (command === 'endquest') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      // Get active quest
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS quests (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL,
+          reward INTEGER NOT NULL,
+          active INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const quest = db.prepare('SELECT id, title FROM quests WHERE guild_id = ? AND active = 1 ORDER BY created_at DESC LIMIT 1')
+        .get(message.guild.id);
+
+      if (!quest) {
+        return await safeReply(message, {
+          content: '❌ No active quest found.',
+        });
+      }
+
+      db.prepare('UPDATE quests SET active = 0 WHERE id = ?').run(quest.id);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Quest Ended')
+            .setDescription(`**${quest.title}** has been ended.`)
+            .setTimestamp(),
+        ],
+      });
     }
   } catch (err) {
     logError(`handleTextCommands [${command}]`, err);
