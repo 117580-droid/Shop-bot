@@ -40,7 +40,11 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               { name: '`!guess <poi>`', value: `Guess a POI location. Only works in <#${GUESS_CHANNEL_ID}>. 120-minute cooldown on wrong guesses.`, inline: false },
               { name: '`!hints`', value: `Show the pixelated location and all guessed POIs with similarity scores. Only works in <#${GUESS_CHANNEL_ID}>.`, inline: false },
               { name: '', value: '', inline: false },
-              { name: '📊 Slash Commands', value: 'Use `/currentpoi` to see game info and more details!', inline: false }
+              { name: '🎯 Game Commands (Slash)', value: '`/currentpoi` - See current POI and game info\n`/guess <poi>` - Guess via slash command\n`/skipcooldown <player>` - Admin: Skip player cooldown\n`/setitem` - Admin: Set current item\n`/additemhint` - Admin: Add hint to item\n`/guessitem` - Guess an item', inline: false },
+              { name: '👥 Clan Commands (Slash)', value: '`/clan create <name>` - Create a clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite user to clan\n`/clan info` - View clan information\n`/level` - Check your level and XP', inline: false },
+              { name: '🎰 Lottery Commands (Slash)', value: '`/spinwheel` - Spin the wheel for rewards', inline: false },
+              { name: '🎁 Giveaway Commands (Slash)', value: '`/giveaway create` - Start a new giveaway\n`/giveaway edit` - Edit giveaway settings\n`/giveaway delete` - Delete a giveaway\n`/giveaway end` - End giveaway early\n`/giveaway reroll` - Reroll giveaway winners', inline: false },
+              { name: '📋 Server Commands (Slash)', value: '`/server-rules` - View server rules', inline: false }
             )
             .setFooter({ text: 'Use !help to see this message again' })
         ]
