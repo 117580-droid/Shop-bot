@@ -48,14 +48,17 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         state.description = input;
         state.step = 3;
         return await safeReply(message, {
-          content: '✅ Description set\n\n💰 Now reply with the **reward amount** (number)',
+          content: '✅ Description set\n\n💰 Now reply with the **reward amount** (any number)',
         });
       } else if (state.step === 3) {
-        // Collecting reward
-        const reward = parseInt(input);
+        // Collecting reward - accept any integer
+        const numStr = input.trim();
+        const reward = parseInt(numStr);
+        
+        // If parseInt returns NaN, try to extract just the numeric part
         if (isNaN(reward)) {
           return await safeReply(message, {
-            content: '❌ Invalid reward amount. Please reply with a number.',
+            content: '❌ I could not read that as a number. Please reply with just a number (like `100` or `-50` or `0`).',
           });
         }
 
