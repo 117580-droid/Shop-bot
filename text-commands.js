@@ -29,35 +29,43 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const command = args[0].toLowerCase();
+  
+  // Get full input AFTER the prefix, stripped
+  const fullInput = message.content.slice(PREFIX.length).trim();
 
   try {
     // ── Check if user is in quest creation flow ────────────────────────────────
-    if (questCreationState.has(message.author.id) && command !== 'addquest') {
+    // This should trigger for ANY input when in quest mode (not just non-addquest)
+    if (questCreationState.has(message.author.id)) {
       const state = questCreationState.get(message.author.id);
-      const input = message.content.trim();
+      
+      // Allow exiting quest mode with !cancel or continuing with any other input
+      if (command === 'cancel') {
+        questCreationState.delete(message.author.id);
+        return await safeReply(message, { content: '❌ Quest creation cancelled.' });
+      }
 
       if (state.step === 1) {
         // Collecting title
-        state.title = input;
+        state.title = fullInput;
         state.step = 2;
         return await safeReply(message, {
-          content: '✅ Title set: **' + input + '**\n\n📝 Now reply with the quest **description**',
+          content: '✅ Title set: **' + fullInput + '**\n\n📝 Now reply with the quest **description**',
         });
       } else if (state.step === 2) {
         // Collecting description
-        state.description = input;
+        state.description = fullInput;
         state.step = 3;
         return await safeReply(message, {
           content: '✅ Description set\n\n💰 Now reply with the **reward amount** (any number)',
         });
       } else if (state.step === 3) {
         // Collecting reward - accept any integer
-        const numStr = input.trim();
-        console.log(`[QUEST DEBUG] User replied with: "${numStr}"`);
-        const reward = parseInt(numStr);
+        console.log(`[QUEST DEBUG] User replied with: "${fullInput}"`);
+        const reward = parseInt(fullInput);
         console.log(`[QUEST DEBUG] Parsed reward: ${reward}, isNaN: ${isNaN(reward)}`);
         
-        // If parseInt returns NaN, try to extract just the numeric part
+        // If parseInt returns NaN, reject
         if (isNaN(reward)) {
           console.log(`[QUEST DEBUG] Reward was NaN, rejecting`);
           return await safeReply(message, {
