@@ -53,14 +53,19 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       } else if (state.step === 3) {
         // Collecting reward - accept any integer
         const numStr = input.trim();
+        console.log(`[QUEST DEBUG] User replied with: "${numStr}"`);
         const reward = parseInt(numStr);
+        console.log(`[QUEST DEBUG] Parsed reward: ${reward}, isNaN: ${isNaN(reward)}`);
         
         // If parseInt returns NaN, try to extract just the numeric part
         if (isNaN(reward)) {
+          console.log(`[QUEST DEBUG] Reward was NaN, rejecting`);
           return await safeReply(message, {
             content: '❌ I could not read that as a number. Please reply with just a number (like `100` or `-50` or `0`).',
           });
         }
+
+        console.log(`[QUEST DEBUG] Creating quest: title="${state.title}", desc="${state.description}", reward=${reward}`);
 
         // Create quests table if it doesn't exist
         db.prepare(`
