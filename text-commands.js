@@ -125,7 +125,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               { name: '', value: '', inline: false },
               { name: '💎 Gem & Economy Commands', value: '`!bank [@user]` - Check gem balance\n`!addgem @user <amount>` - Add gems to a user (Owner only)\n`!removegem @user <amount>` - Remove gems from a user (Owner only)\n`!shop` - View shop items\n`!redeem <item name>` - Buy an item from the shop\n`!additem <name> <price>` - Add item to shop (Owner only)\n`!removeitem <name>` - Remove item from shop (Owner only)', inline: false },
               { name: '⭐ Leveling & Stats', value: '`!xp [@user]` - Check XP and level stats\n`!xpleaderboard` - View top 10 players by XP\n`!gemleaderboard` - View top 15 players by gems\n`!addxp @user <amount>` - Add XP to a user (Owner only)\n`!removexp @user <amount>` - Remove XP from a user (Owner only)', inline: false },
-              { name: '📋 Quest Commands', value: '`!addquest <title> | <description> | <reward>` - Create a new quest in one command (Owner only)\n`!endquest` - End the current quest (Owner only)', inline: false },
+              { name: '📋 Quest Commands', value: '`!quests` - View all active quests\n`!addquest <title> | <description> | <reward>` - Create a new quest in one command (Owner only)\n`!endquest` - End the current quest (Owner only)', inline: false },
               { name: '🏰 Clan Commands', value: '`!clans` - View server clan leaderboard', inline: false },
               { name: '🎯 Game Commands (Slash)', value: '`/currentpoi` - See current POI and game info\n`/guess <poi>` - Guess via slash command\n`/skipcooldown <player>` - Admin: Skip player cooldown\n`/setitem` - Admin: Set current item\n`/additemhint` - Admin: Add hint to item\n`/guessitem` - Guess an item', inline: false },
               { name: '👥 Clan Commands (Slash)', value: '`/clan create <name>` - Create a clan\n`/clan delete` - Delete your clan\n`/clan invite <user>` - Invite user to clan\n`/clan info` - View clan information\n`/level` - Check your level and XP', inline: false },
@@ -136,6 +136,45 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
             .setFooter({ text: 'Use !help to see this message again' })
         ]
       });
+    }
+
+    // ── !quests ────────────────────────────────────────────────────────────────
+    if (command === 'quests') {
+      // Create quests table if it doesn't exist
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS quests (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL,
+          reward INTEGER NOT NULL,
+          active INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const quests = db.prepare('SELECT id, title, description, reward FROM quests WHERE guild_id = ? AND active = 1 ORDER BY created_at DESC')
+        .all(message.guild.id);
+
+      if (quests.length === 0) {
+        return await safeReply(message, {
+          content: '📭 No active quests available. Create one with `!addquest`!',
+        });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`📋 Active Quests (${quests.length})`);
+
+      for (const quest of quests) {
+        embed.addFields({
+          name: `🎯 ${quest.title}`,
+          value: `${quest.description}\n💰 Reward: **${quest.reward} XP**`,
+          inline: false,
+        });
+      }
+
+      return await safeReply(message, { embeds: [embed] });
     }
 
     // ── !guess ─────────────────────────────────────────────────────────────────
