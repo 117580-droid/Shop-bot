@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits, ActivityType } = require('discord.js');
 
 const Database = require('better-sqlite3');
 const fs = require('fs');
@@ -640,6 +640,13 @@ const gameModule = { ...gameJs, userCooldowns, getCurrentPoi, newRandomPoi, getC
 // ─── Client Events ────────────────────────────────────────────────────────────
 
 client.once('ready', () => {
+  client.user.setPresence({
+    status: 'online',
+    activities: [{
+      name: 'the Shop Bot',
+      type: ActivityType.Playing,
+    }],
+  });
   log('INFO', `Logged in as ${client.user.tag}`);
 
   // Start the callback server
