@@ -571,6 +571,48 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
+
+    // ── !drop ──────────────────────────────────────────────────────────────────
+    // Chance-based game: try to land on The Agency (very low chance)
+    if (command === 'drop') {
+      const AGENCY_CHANCE = 2; // 2% chance to land on The Agency
+      const FORTNITE_POIS = [
+        'Pleasant Park', 'Tilted Towers', 'Retail Row', 'Moisty Mire', 
+        'Lazy Links', 'Haunted Hills', 'Salty Springs', 'Paradise Palms',
+        'Flush Factory', 'Junk Junction', 'Greasy Grove', 'Loot Lake',
+        'Fatal Fields', 'Snobby Shores', 'Shifty Shafts', 'Wailing Woods',
+        'Leaky Lake', 'Hot Drops', 'Polar Peak', 'Frosty Flights'
+      ];
+
+      // Roll for drop location
+      const roll = Math.random() * 100;
+      let dropLocation;
+
+      if (roll < AGENCY_CHANCE) {
+        dropLocation = '🏢 THE AGENCY';
+      } else {
+        dropLocation = FORTNITE_POIS[Math.floor(Math.random() * FORTNITE_POIS.length)];
+      }
+
+      const isAgency = roll < AGENCY_CHANCE;
+      const resultColor = isAgency ? 0xFFD700 : 0x5865F2; // Gold for Agency, blue for normal
+      const resultEmoji = isAgency ? '🎯' : '📍';
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(resultColor)
+            .setTitle(`${resultEmoji} Drop Result`)
+            .setDescription(
+              isAgency 
+                ? `🚁 **${message.author.username}** landed at **${dropLocation}**!\n\n✨ **ULTRA RARE!** You found The Agency (${AGENCY_CHANCE}% chance)!`
+                : `🚁 **${message.author.username}** landed at **${dropLocation}**`
+            )
+            .setFooter({ text: `Agency Drop Chance: ${AGENCY_CHANCE}%` })
+            .setTimestamp(),
+        ],
+      });
+    }
   } catch (err) {
     logError(`handleTextCommands [${command}]`, err);
   }
