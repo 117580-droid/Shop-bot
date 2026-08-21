@@ -682,5 +682,9 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-module.exports = { handleTextCommands };
+  } catch (err) {
+    logError(`handleTextCommands [${command}]`, err);
+  }
+}
 
+module.exports = { handleTextCommands };
