@@ -574,8 +574,13 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
     // ── !drop ──────────────────────────────────────────────────────────────────
     // Chance-based game: try to land on The Agency (very low chance)
+
+    // ── !drop ──────────────────────────────────────────────────────────────────
+    // Chance-based game: try to land on The Agency (very low chance)
     if (command === 'drop') {
       const AGENCY_CHANCE = 2; // 2% chance to land on The Agency
+      const AGENCY_GEM_REWARD = 2; // Gems rewarded for landing on Agency
+      const DROP_COOLDOWN_MS = 10 * 60 * 60 * 1000; // 10 hours in milliseconds
       const FORTNITE_POIS = [
         'Pleasant Park', 'Tilted Towers', 'Retail Row', 'Moisty Mire', 
         'Lazy Links', 'Haunted Hills', 'Salty Springs', 'Paradise Palms',
@@ -583,6 +588,29 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         'Fatal Fields', 'Snobby Shores', 'Shifty Shafts', 'Wailing Woods',
         'Leaky Lake', 'Hot Drops', 'Polar Peak', 'Frosty Flights'
       ];
+
+      // Initialize drop cooldown table if it doesn't exist
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS drop_cooldowns (
+          user_id TEXT PRIMARY KEY,
+          last_drop_time INTEGER
+        )
+      `).run();
+
+      // Check cooldown
+      const cooldownRow = db.prepare('SELECT last_drop_time FROM drop_cooldowns WHERE user_id = ?').get(message.author.id);
+      if (cooldownRow) {
+        const now = Date.now();
+        const timeSinceLastDrop = now - cooldownRow.last_drop_time;
+        if (timeSinceLastDrop < DROP_COOLDOWN_MS) {
+          const remainingMs = DROP_COOLDOWN_MS - timeSinceLastDrop;
+          const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+          const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+          return await safeReply(message, {
+            content: `⏳ You just dropped! You can drop again in **${hours}h ${minutes}m**.`,
+          });
+        }
+      }
 
       // Roll for drop location
       const roll = Math.random() * 100;
@@ -598,6 +626,43 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       const resultColor = isAgency ? 0xFFD700 : 0x5865F2; // Gold for Agency, blue for normal
       const resultEmoji = isAgency ? '🎯' : '📍';
 
+      // Record cooldown
+      db.prepare('INSERT OR REPLACE INTO drop_cooldowns (user_id, last_drop_time) VALUES (?, ?)').run(
+        message.author.id,
+        Date.now()
+      );
+
+      // If landed on Agency, award gems and DM owner
+      if (isAgency) {
+        // Award 2 gems to player
+        const userRow = db.prepare('SELECT balance FROM users WHERE user_id = ?').get(message.author.id);
+        const currentBalance = userRow ? userRow.balance : 0;
+        const newBalance = currentBalance + AGENCY_GEM_REWARD;
+
+        db.prepare('INSERT INTO users (user_id, username, balance) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET balance = ?')
+          .run(message.author.id, message.author.username, newBalance, newBalance);
+
+        // DM owner about the rare drop
+        try {
+          const owner = await client.users.fetch(OWNER_ID);
+          await owner.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xFFD700)
+                .setTitle('🎯 ULTRA RARE DROP!')
+                .setDescription(`**${message.author.username}** just landed on **THE AGENCY**!`)
+                .addFields(
+                  { name: 'Reward Given', value: `💎 ${AGENCY_GEM_REWARD} gems`, inline: true },
+                  { name: 'Chance', value: `${AGENCY_CHANCE}%`, inline: true }
+                )
+                .setTimestamp(),
+            ],
+          });
+        } catch (dmErr) {
+          logError('drop: failed to DM owner about Agency drop', dmErr);
+        }
+      }
+
       return await safeReply(message, {
         embeds: [
           new EmbedBuilder()
@@ -605,18 +670,17 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
             .setTitle(`${resultEmoji} Drop Result`)
             .setDescription(
               isAgency 
-                ? `🚁 **${message.author.username}** landed at **${dropLocation}**!\n\n✨ **ULTRA RARE!** You found The Agency (${AGENCY_CHANCE}% chance)!`
+                ? `🚁 **${message.author.username}** landed at **${dropLocation}**!\n\n✨ **ULTRA RARE!** You found The Agency!\n💎 **+${AGENCY_GEM_REWARD} gems** added to your account!`
                 : `🚁 **${message.author.username}** landed at **${dropLocation}**`
             )
-            .setFooter({ text: `Agency Drop Chance: ${AGENCY_CHANCE}%` })
+            .addFields(
+              { name: 'Next Drop Available', value: 'In 10 hours', inline: true },
+              { name: 'Agency Drop Chance', value: `${AGENCY_CHANCE}%`, inline: true }
+            )
             .setTimestamp(),
         ],
       });
     }
-  } catch (err) {
-    logError(`handleTextCommands [${command}]`, err);
-  }
-}
 
 module.exports = { handleTextCommands };
 
