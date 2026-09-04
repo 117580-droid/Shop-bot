@@ -1,0 +1,6 @@
+Fix all text commands - remove guild_id from shop schema and fix .run() spacing
+
+Changes:
+1. Remove guild_id from shop_items CREATE TABLE
+2. Fix '. run(' spacing issues to '.run('
+3. Add guild checks to shop commands

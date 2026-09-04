@@ -79,7 +79,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         db.prepare(`
           CREATE TABLE IF NOT EXISTS quests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            guild_id TEXT NOT NULL,
+            
             title TEXT NOT NULL,
             description TEXT NOT NULL,
             reward INTEGER NOT NULL,
@@ -144,7 +144,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS quests (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guild_id TEXT NOT NULL,
+          
           title TEXT NOT NULL,
           description TEXT NOT NULL,
           reward INTEGER NOT NULL,
@@ -153,7 +153,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         )
       `).run();
 
-      const quests = db.prepare('SELECT id, title, description, reward FROM quests WHERE guild_id = ? AND active = 1 ORDER BY created_at DESC')
+      const quests = db.prepare('SELECT id, title, description, reward FROM quests WHERE active = 1 ORDER BY created_at DESC')
         .all(message.guild.id);
 
       if (quests.length === 0) {
@@ -471,7 +471,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS quests (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guild_id TEXT NOT NULL,
+          
           title TEXT NOT NULL,
           description TEXT NOT NULL,
           reward INTEGER NOT NULL,
@@ -541,7 +541,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS quests (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guild_id TEXT NOT NULL,
+          
           title TEXT NOT NULL,
           description TEXT NOT NULL,
           reward INTEGER NOT NULL,
@@ -550,7 +550,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         )
       `).run();
 
-      const quest = db.prepare('SELECT id, title FROM quests WHERE guild_id = ? AND active = 1 ORDER BY created_at DESC LIMIT 1')
+      const quest = db.prepare('SELECT id, title FROM quests WHERE active = 1 ORDER BY created_at DESC LIMIT 1')
         .get(message.guild.id);
 
       if (!quest) {
@@ -667,7 +667,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guild_id TEXT NOT NULL,
+          
           name TEXT NOT NULL,
           price INTEGER NOT NULL,
           active INTEGER DEFAULT 1,
@@ -675,7 +675,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         )
       `).run();
 
-      const items = db.prepare('SELECT id, name, price FROM shop_items WHERE guild_id = ? AND active = 1 ORDER BY price ASC')
+      const items = db.prepare('SELECT id, name, price FROM shop_items WHERE active = 1 ORDER BY price ASC')
         .all(message.guild.id);
 
       if (items.length === 0) {
@@ -709,7 +709,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guild_id TEXT NOT NULL,
+          
           name TEXT NOT NULL,
           price INTEGER NOT NULL,
           active INTEGER DEFAULT 1,
@@ -754,7 +754,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guild_id TEXT NOT NULL,
+          
           name TEXT NOT NULL,
           price INTEGER NOT NULL,
           active INTEGER DEFAULT 1,
@@ -797,7 +797,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          guild_id TEXT NOT NULL,
+          
           name TEXT NOT NULL,
           price INTEGER NOT NULL,
           active INTEGER DEFAULT 1,
