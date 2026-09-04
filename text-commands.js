@@ -676,7 +676,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       `).run();
 
       const items = db.prepare('SELECT id, name, price FROM shop_items WHERE active = 1 ORDER BY price ASC')
-        .all(message.guild.id);
+        .all();
 
       if (items.length === 0) {
         return await safeReply(message, {
@@ -726,8 +726,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      db.prepare('INSERT INTO shop_items (guild_id, name, price, active) VALUES (?, ?, ?, 1)')
-        .run(message.guild.id, itemName, price);
+      db.prepare('INSERT INTO shop_items (name, price, active) VALUES (?, ?, 1)')
+        .run(itemName, price);
 
       return await safeReply(message, {
         embeds: [
@@ -770,8 +770,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      const item = db.prepare('SELECT id FROM shop_items WHERE guild_id = ? AND name = ? AND active = 1')
-        .get(message.guild.id, itemName);
+      const item = db.prepare('SELECT id FROM shop_items WHERE name = ? AND active = 1')
+        .get(itemName);
 
       if (!item) {
         return await safeReply(message, {
@@ -813,8 +813,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      const item = db.prepare('SELECT id, price FROM shop_items WHERE guild_id = ? AND name = ? AND active = 1')
-        .get(message.guild.id, itemName);
+      const item = db.prepare('SELECT id, price FROM shop_items WHERE name = ? AND active = 1')
+        .get(itemName);
 
       if (!item) {
         return await safeReply(message, {
