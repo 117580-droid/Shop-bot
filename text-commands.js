@@ -662,21 +662,20 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
-    // ── !shop ──────────────────────────────────────────────────────────────────
     if (command === 'shop') {
+      if (!message.guild) {
+        return await safeReply(message, { content: '❌ This command only works in server channels.' });
+      }
+
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          
           name TEXT NOT NULL,
-          price INTEGER NOT NULL,
-          active INTEGER DEFAULT 1,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          price INTEGER NOT NULL
         )
       `).run();
 
-      const items = db.prepare('SELECT id, name, price FROM shop_items WHERE active = 1 ORDER BY price ASC')
-        .all();
+      const items = db.prepare('SELECT id, name, price FROM shop_items ORDER BY price ASC').all();
 
       if (items.length === 0) {
         return await safeReply(message, {
@@ -697,9 +696,10 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
-
-    // ── !additem ────────────────────────────────────────────────────────────────
     if (command === 'additem') {
+      if (!message.guild) {
+        return await safeReply(message, { content: '❌ This command only works in server channels.' });
+      }
       if (message.author.id !== OWNER_ID) {
         return await safeReply(message, {
           content: '❌ Only the bot owner can use this command.',
@@ -709,11 +709,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          
           name TEXT NOT NULL,
-          price INTEGER NOT NULL,
-          active INTEGER DEFAULT 1,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          price INTEGER NOT NULL
         )
       `).run();
 
@@ -726,7 +723,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      db.prepare('INSERT INTO shop_items (name, price, active) VALUES (?, ?, 1)')
+      db.prepare('INSERT INTO shop_items (name, price) VALUES (?, ?)')
         .run(itemName, price);
 
       return await safeReply(message, {
@@ -742,9 +739,11 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
-
     // ── !removeitem ────────────────────────────────────────────────────────────
     if (command === 'removeitem') {
+      if (!message.guild) {
+        return await safeReply(message, { content: '❌ This command only works in server channels.' });
+      }
       if (message.author.id !== OWNER_ID) {
         return await safeReply(message, {
           content: '❌ Only the bot owner can use this command.',
@@ -754,11 +753,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          
           name TEXT NOT NULL,
-          price INTEGER NOT NULL,
-          active INTEGER DEFAULT 1,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          price INTEGER NOT NULL
         )
       `).run();
 
@@ -770,8 +766,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      const item = db.prepare('SELECT id FROM shop_items WHERE name = ? AND active = 1')
-        .get(itemName);
+      const item = db.prepare('SELECT id FROM shop_items WHERE name = ?').get(itemName);
 
       if (!item) {
         return await safeReply(message, {
@@ -779,7 +774,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      db.prepare('UPDATE shop_items SET active = 0 WHERE id = ?').run(item.id);
+      db.prepare('DELETE FROM shop_items WHERE id = ?').run(item.id);
 
       return await safeReply(message, {
         embeds: [
@@ -794,14 +789,15 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
     // ── !redeem ────────────────────────────────────────────────────────────────
     if (command === 'redeem') {
+      if (!message.guild) {
+        return await safeReply(message, { content: '❌ This command only works in server channels.' });
+      }
+
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          
           name TEXT NOT NULL,
-          price INTEGER NOT NULL,
-          active INTEGER DEFAULT 1,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          price INTEGER NOT NULL
         )
       `).run();
 
@@ -813,8 +809,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         });
       }
 
-      const item = db.prepare('SELECT id, price FROM shop_items WHERE name = ? AND active = 1')
-        .get(itemName);
+      const item = db.prepare('SELECT id, price FROM shop_items WHERE name = ?').get(itemName);
 
       if (!item) {
         return await safeReply(message, {
@@ -849,7 +844,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
-
     // ── !xp ────────────────────────────────────────────────────────────────────
     if (command === 'xp') {
       const target = message.mentions.users.first() || message.author;
