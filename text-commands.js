@@ -572,6 +572,373 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       });
     }
 
+
+    // ── !bank ──────────────────────────────────────────────────────────────────
+    if (command === 'bank') {
+      const target = message.mentions.users.first() || message.author;
+      const row = db.prepare('SELECT balance FROM users WHERE user_id = ?').get(target.id);
+      const balance = row ? row.balance : 0;
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('💎 Gem Balance')
+            .setDescription(`**${target.username}** has **${balance}** gems`)
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !addgem ────────────────────────────────────────────────────────────────
+    if (command === 'addgem') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      const target = message.mentions.users.first();
+      const amount = parseInt(args[2]);
+
+      if (!target || isNaN(amount) || amount <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!addgem @user <amount>`\nExample: `!addgem @John 50`',
+        });
+      }
+
+      const row = db.prepare('SELECT balance FROM users WHERE user_id = ?').get(target.id);
+      const currentBalance = row ? row.balance : 0;
+      const newBalance = currentBalance + amount;
+
+      db.prepare('INSERT INTO users (user_id, username, balance) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET balance = ?')
+        .run(target.id, target.username, newBalance, newBalance);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Gems Added')
+            .setDescription(`Added **${amount}** gems to **${target.username}**`)
+            .addFields({ name: 'New Balance', value: `💎 ${newBalance}`, inline: true })
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !removegem ────────────────────────────────────────────────────────────
+    if (command === 'removegem') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      const target = message.mentions.users.first();
+      const amount = parseInt(args[2]);
+
+      if (!target || isNaN(amount) || amount <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!removegem @user <amount>`\nExample: `!removegem @John 25`',
+        });
+      }
+
+      const row = db.prepare('SELECT balance FROM users WHERE user_id = ?').get(target.id);
+      const currentBalance = row ? row.balance : 0;
+      const newBalance = Math.max(0, currentBalance - amount);
+
+      db.prepare('INSERT INTO users (user_id, username, balance) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET balance = ?')
+        .run(target.id, target.username, newBalance, newBalance);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xED4245)
+            .setTitle('✅ Gems Removed')
+            .setDescription(`Removed **${amount}** gems from **${target.username}**`)
+            .addFields({ name: 'New Balance', value: `💎 ${newBalance}`, inline: true })
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !shop ──────────────────────────────────────────────────────────────────
+    if (command === 'shop') {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          price INTEGER NOT NULL,
+          active INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const items = db.prepare('SELECT id, name, price FROM shop_items WHERE guild_id = ? AND active = 1 ORDER BY price ASC')
+        .all(message.guild.id);
+
+      if (items.length === 0) {
+        return await safeReply(message, {
+          content: '🏪 No items in the shop. Owner can add items with `!additem <name> <price>`',
+        });
+      }
+
+      const itemList = items.map((item, i) => `${i + 1}. **${item.name}** - 💎 ${item.price} gems`).join('\n');
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🏪 Shop')
+            .setDescription(itemList)
+            .setFooter({ text: 'Use !redeem <item name> to buy an item' })
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !additem ────────────────────────────────────────────────────────────────
+    if (command === 'additem') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          price INTEGER NOT NULL,
+          active INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const itemName = args.slice(1, -1).join(' ').trim();
+      const price = parseInt(args[args.length - 1]);
+
+      if (!itemName || isNaN(price) || price <= 0) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!additem <name> <price>`\nExample: `!additem Golden Sword 100`',
+        });
+      }
+
+      db.prepare('INSERT INTO shop_items (guild_id, name, price, active) VALUES (?, ?, ?, 1)')
+        .run(message.guild.id, itemName, price);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Item Added to Shop')
+            .addFields(
+              { name: 'Item', value: itemName, inline: true },
+              { name: 'Price', value: `💎 ${price}`, inline: true }
+            )
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !removeitem ────────────────────────────────────────────────────────────
+    if (command === 'removeitem') {
+      if (message.author.id !== OWNER_ID) {
+        return await safeReply(message, {
+          content: '❌ Only the bot owner can use this command.',
+        });
+      }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          price INTEGER NOT NULL,
+          active INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const itemName = args.slice(1).join(' ').trim();
+
+      if (!itemName) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!removeitem <item name>`\nExample: `!removeitem Golden Sword`',
+        });
+      }
+
+      const item = db.prepare('SELECT id FROM shop_items WHERE guild_id = ? AND name = ? AND active = 1')
+        .get(message.guild.id, itemName);
+
+      if (!item) {
+        return await safeReply(message, {
+          content: `❌ Item **${itemName}** not found in shop.`,
+        });
+      }
+
+      db.prepare('UPDATE shop_items SET active = 0 WHERE id = ?').run(item.id);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Item Removed from Shop')
+            .setDescription(`**${itemName}** has been removed.`)
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !redeem ────────────────────────────────────────────────────────────────
+    if (command === 'redeem') {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS shop_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guild_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          price INTEGER NOT NULL,
+          active INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+
+      const itemName = args.slice(1).join(' ').trim();
+
+      if (!itemName) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!redeem <item name>`\nExample: `!redeem Golden Sword`',
+        });
+      }
+
+      const item = db.prepare('SELECT id, price FROM shop_items WHERE guild_id = ? AND name = ? AND active = 1')
+        .get(message.guild.id, itemName);
+
+      if (!item) {
+        return await safeReply(message, {
+          content: `❌ Item **${itemName}** not found in shop.`,
+        });
+      }
+
+      const userRow = db.prepare('SELECT balance FROM users WHERE user_id = ?').get(message.author.id);
+      const balance = userRow ? userRow.balance : 0;
+
+      if (balance < item.price) {
+        return await safeReply(message, {
+          content: `❌ You don't have enough gems! You need **${item.price}** gems but only have **${balance}**.`,
+        });
+      }
+
+      const newBalance = balance - item.price;
+      db.prepare('INSERT INTO users (user_id, username, balance) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET balance = ?')
+        .run(message.author.id, message.author.username, newBalance, newBalance);
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('✅ Item Purchased!')
+            .addFields(
+              { name: 'Item', value: itemName, inline: true },
+              { name: 'Price', value: `💎 ${item.price}`, inline: true },
+              { name: 'Remaining Balance', value: `💎 ${newBalance}`, inline: true }
+            )
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !xp ────────────────────────────────────────────────────────────────────
+    if (command === 'xp') {
+      const target = message.mentions.users.first() || message.author;
+      const row = db.prepare('SELECT current_xp, lifetime_xp, level FROM user_xp WHERE user_id = ?').get(target.id);
+      const currentXp = row ? row.current_xp : 0;
+      const lifetimeXp = row ? row.lifetime_xp : 0;
+      const level = row ? row.level : 0;
+      const xpNeededPerLevel = 100;
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('⭐ XP Stats')
+            .setDescription(`**${target.username}**'s progression`)
+            .addFields(
+              { name: 'Level', value: `${level}`, inline: true },
+              { name: 'Progress to Next Level', value: `${currentXp}/${xpNeededPerLevel} XP`, inline: true },
+              { name: 'Lifetime XP', value: `${lifetimeXp.toLocaleString()}`, inline: true }
+            )
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !xpleaderboard ────────────────────────────────────────────────────────
+    if (command === 'xpleaderboard') {
+      const topPlayers = db.prepare('SELECT user_id, lifetime_xp, level FROM user_xp ORDER BY lifetime_xp DESC LIMIT 10').all();
+
+      if (topPlayers.length === 0) {
+        return await safeReply(message, {
+          content: '📭 No XP data available yet.',
+        });
+      }
+
+      const leaderboard = await Promise.all(
+        topPlayers.map(async (p, i) => {
+          try {
+            const user = await client.users.fetch(p.user_id);
+            return `${i + 1}. **${user.username}** - Level ${p.level} (${p.lifetime_xp.toLocaleString()} XP)`;
+          } catch {
+            return `${i + 1}. **Unknown User** - Level ${p.level} (${p.lifetime_xp.toLocaleString()} XP)`;
+          }
+        })
+      );
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🏆 Top 10 XP Leaderboard')
+            .setDescription(leaderboard.join('\n'))
+            .setTimestamp(),
+        ],
+      });
+    }
+
+    // ── !gemleaderboard ────────────────────────────────────────────────────────
+    if (command === 'gemleaderboard') {
+      const topPlayers = db.prepare('SELECT user_id, balance FROM users ORDER BY balance DESC LIMIT 15').all();
+
+      if (topPlayers.length === 0) {
+        return await safeReply(message, {
+          content: '📭 No gem data available yet.',
+        });
+      }
+
+      const leaderboard = await Promise.all(
+        topPlayers.map(async (p, i) => {
+          try {
+            const user = await client.users.fetch(p.user_id);
+            return `${i + 1}. **${user.username}** - 💎 ${p.balance}`;
+          } catch {
+            return `${i + 1}. **Unknown User** - 💎 ${p.balance}`;
+          }
+        })
+      );
+
+      return await safeReply(message, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('💎 Top 15 Gem Leaderboard')
+            .setDescription(leaderboard.join('\n'))
+            .setTimestamp(),
+        ],
+      });
+    }
+
     // ── !drop ──────────────────────────────────────────────────────────────────
     // Chance-based game: try to land on The Agency (very low chance)
 
