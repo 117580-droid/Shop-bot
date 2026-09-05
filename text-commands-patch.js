@@ -105,3 +105,142 @@
       });
     }
 
+
+    // -- !kick --
+    if (command === 'kick') {
+      if (!message.member.permissions.has('KickMembers')) {
+        return await safeReply(message, {
+          content: '❌ You need the **Kick Members** permission to use this command.',
+        });
+      }
+
+      const target = message.mentions.members.first();
+      const reason = args.slice(2).join(' ') || 'No reason provided';
+
+      if (!target) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!kick @user [reason]`\\nExample: `!kick @John Spam`',
+        });
+      }
+
+      if (target.id === message.author.id) {
+        return await safeReply(message, {
+          content: '❌ You cannot kick yourself!',
+        });
+      }
+
+      if (target.user.bot) {
+        return await safeReply(message, {
+          content: '❌ You cannot kick bots!',
+        });
+      }
+
+      if (!message.guild.members.me.permissions.has('KickMembers')) {
+        return await safeReply(message, {
+          content: '❌ I do not have the **Kick Members** permission!',
+        });
+      }
+
+      if (target.roles.highest.position >= message.member.roles.highest.position) {
+        return await safeReply(message, {
+          content: '❌ You cannot kick someone with an equal or higher role than you!',
+        });
+      }
+
+      try {
+        await target.kick(reason);
+
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xED4245)
+              .setTitle('👢 Member Kicked')
+              .addFields(
+                { name: 'User', value: `${target.user.username}#${target.user.discriminator}`, inline: true },
+                { name: 'Kicked By', value: message.author.username, inline: true },
+                { name: 'Reason', value: reason, inline: false }
+              )
+              .setThumbnail(target.user.avatarURL())
+              .setTimestamp(),
+          ],
+        });
+      } catch (err) {
+        logError('kick', err);
+        return await safeReply(message, {
+          content: '❌ Failed to kick member. Please try again.',
+        });
+      }
+    }
+
+    // -- !ban --
+    if (command === 'ban') {
+      if (!message.member.permissions.has('BanMembers')) {
+        return await safeReply(message, {
+          content: '❌ You need the **Ban Members** permission to use this command.',
+        });
+      }
+
+      const target = message.mentions.members.first();
+      const reason = args.slice(2).join(' ') || 'No reason provided';
+
+      if (!target) {
+        return await safeReply(message, {
+          content: '❌ Usage: `!ban @user [reason]`\\nExample: `!ban @John Hacking`',
+        });
+      }
+
+      if (target.id === message.author.id) {
+        return await safeReply(message, {
+          content: '❌ You cannot ban yourself!',
+        });
+      }
+
+      if (target.user.bot) {
+        return await safeReply(message, {
+          content: '❌ You cannot ban bots!',
+        });
+      }
+
+      if (!message.guild.members.me.permissions.has('BanMembers')) {
+        return await safeReply(message, {
+          content: '❌ I do not have the **Ban Members** permission!',
+        });
+      }
+
+      if (target.roles.highest.position >= message.member.roles.highest.position) {
+        return await safeReply(message, {
+          content: '❌ You cannot ban someone with an equal or higher role than you!',
+        });
+      }
+
+      try {
+        await message.guild.members.ban(target, { reason });
+
+        return await safeReply(message, {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xED4245)
+              .setTitle('🔨 Member Banned')
+              .addFields(
+                { name: 'User', value: `${target.user.username}#${target.user.discriminator}`, inline: true },
+                { name: 'Banned By', value: message.author.username, inline: true },
+                { name: 'Reason', value: reason, inline: false }
+              )
+              .setThumbnail(target.user.avatarURL())
+              .setTimestamp(),
+          ],
+        });
+      } catch (err) {
+        logError('ban', err);
+        return await safeReply(message, {
+          content: '❌ Failed to ban member. Please try again.',
+        });
+      }
+    }
+
+  } catch (err) {
+    logError(`handleTextCommands [${command}]`, err);
+  }
+}
+
+module.exports = { handleTextCommands };
