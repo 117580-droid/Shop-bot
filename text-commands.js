@@ -805,7 +805,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
       if (!itemName) {
         return await safeReply(message, {
-          content: '❌ Usage: `!redeem <item name>`\nExample: `!redeem Golden Sword`',
+          content: '❌ Usage: `!redeem <item name>`\\nExample: `!redeem Golden Sword`',
         });
       }
 
@@ -830,6 +830,54 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       db.prepare('INSERT INTO users (user_id, username, balance) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET balance = ?')
         .run(message.author.id, message.author.username, newBalance, newBalance);
 
+      // ✅ NOTIFY OWNER - Send DM and @mention in channel
+      const OWNER_ID = process.env.OWNER_ID;
+      const now = new Date().toLocaleString();
+      
+      try {
+        // Send DM to owner
+        const owner = await client.users.fetch(OWNER_ID);
+        await owner.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x5865F2)
+              .setTitle('🛍️ Purchase Alert!')
+              .addFields(
+                { name: 'Buyer', value: `<@${message.author.id}> (${message.author.username})`, inline: true },
+                { name: 'Item', value: itemName, inline: true },
+                { name: 'Price', value: `💎 ${item.price}`, inline: true },
+                { name: 'Time', value: now, inline: false }
+              )
+              .setThumbnail(message.author.avatarURL())
+              .setTimestamp()
+          ]
+        });
+      } catch (dmErr) {
+        console.error('[ERROR] Failed to send purchase DM to owner:', dmErr.message);
+      }
+
+      // Send @mention notification in the channel
+      try {
+        await message.channel.send({
+          content: `<@${OWNER_ID}> 🔔 **Purchase Notification**`,
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xFFD700)
+              .setTitle('🛍️ Someone Bought an Item!')
+              .addFields(
+                { name: 'Buyer', value: `${message.author.username}`, inline: true },
+                { name: 'Item', value: itemName, inline: true },
+                { name: 'Price', value: `💎 ${item.price}`, inline: true },
+                { name: 'Time', value: now, inline: false }
+              )
+              .setThumbnail(message.author.avatarURL())
+              .setTimestamp()
+          ]
+        });
+      } catch (pingErr) {
+        console.error('[ERROR] Failed to send purchase ping in channel:', pingErr.message);
+      }
+
       return await safeReply(message, {
         embeds: [
           new EmbedBuilder()
@@ -844,6 +892,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
+
     // ── !xp ────────────────────────────────────────────────────────────────────
     if (command === 'xp') {
       const target = message.mentions.users.first() || message.author;
