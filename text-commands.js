@@ -575,6 +575,15 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
     // ── !bank ──────────────────────────────────────────────────────────────────
     if (command === 'bank') {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS users (
+          user_id TEXT PRIMARY KEY,
+          username TEXT,
+          balance INTEGER DEFAULT 0,
+          last_daily_claim TEXT
+        )
+      `).run();
+
       const target = message.mentions.users.first() || message.author;
       const row = db.prepare('SELECT balance FROM users WHERE user_id = ?').get(target.id);
       const balance = row ? row.balance : 0;
@@ -592,6 +601,15 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
     // ── !addgem ────────────────────────────────────────────────────────────────
     if (command === 'addgem') {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS users (
+          user_id TEXT PRIMARY KEY,
+          username TEXT,
+          balance INTEGER DEFAULT 0,
+          last_daily_claim TEXT
+        )
+      `).run();
+
       if (message.author.id !== OWNER_ID) {
         return await safeReply(message, {
           content: '❌ Only the bot owner can use this command.',
@@ -628,6 +646,15 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
     // ── !removegem ────────────────────────────────────────────────────────────
     if (command === 'removegem') {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS users (
+          user_id TEXT PRIMARY KEY,
+          username TEXT,
+          balance INTEGER DEFAULT 0,
+          last_daily_claim TEXT
+        )
+      `).run();
+
       if (message.author.id !== OWNER_ID) {
         return await safeReply(message, {
           content: '❌ Only the bot owner can use this command.',
@@ -666,6 +693,15 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       if (!message.guild) {
         return await safeReply(message, { content: '❌ This command only works in server channels.' });
       }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS users (
+          user_id TEXT PRIMARY KEY,
+          username TEXT,
+          balance INTEGER DEFAULT 0,
+          last_daily_claim TEXT
+        )
+      `).run();
 
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
@@ -792,6 +828,15 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       if (!message.guild) {
         return await safeReply(message, { content: '❌ This command only works in server channels.' });
       }
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS users (
+          user_id TEXT PRIMARY KEY,
+          username TEXT,
+          balance INTEGER DEFAULT 0,
+          last_daily_claim TEXT
+        )
+      `).run();
 
       db.prepare(`
         CREATE TABLE IF NOT EXISTS shop_items (
