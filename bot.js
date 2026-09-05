@@ -16,6 +16,95 @@ const { handleMemberJoin, handleMemberRemove } = require('./welcome.js');
 // ─── Process-level error handlers ────────────────────────────────────────────
 // Must be registered before anything else so no rejection or exception slips
 // through silently and crashes the process without a trace.
+
+// ─── Database Initialization & Schema Management ────────────────────────────────
+/**
+ * Initialize and validate the database schema. This function:
+ * 1. Creates tables if they don't exist
+ * 2. Adds missing columns to existing tables (schema migration)
+ * 3. Ensures the schema is always correct, preventing "no such column" errors
+ *
+ * Call this once at bot startup before any database queries.
+ */
+function initializeDatabase(db) {
+  try {
+    log('INFO', 'Initializing database schema...');
+
+    // ─── Users table (for gem/currency system) ───────────────────────────────
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        username TEXT,
+        balance INTEGER DEFAULT 0
+      )
+    `).run();
+
+    // Add balance column if it's missing (handles old databases)
+    const usersColumns = db.prepare("PRAGMA table_info(users)").all();
+    if (!usersColumns.some(col => col.name === 'balance')) {
+      log('WARN', 'users table missing balance column — adding it now');
+      db.prepare('ALTER TABLE users ADD COLUMN balance INTEGER DEFAULT 0').run();
+    }
+
+    // ─── Shop items table ─────────────────────────────────────────────────────
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS shop_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        price INTEGER NOT NULL
+      )
+    `).run();
+
+    // ─── User XP table ────────────────────────────────────────────────────────
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS user_xp (
+        user_id TEXT PRIMARY KEY,
+        current_xp INTEGER DEFAULT 0,
+        lifetime_xp INTEGER DEFAULT 0,
+        level INTEGER DEFAULT 0
+      )
+    `).run();
+
+    // ─── Quests table ─────────────────────────────────────────────────────────
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS quests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        reward INTEGER NOT NULL,
+        active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    // ─── Lottery participants table ────────────────────────────────────────────
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS lottery_participants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    // ─── Lottery winners table ─────────────────────────────────────────────────
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS lottery_winners (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        winner_id TEXT NOT NULL,
+        winner_username TEXT NOT NULL,
+        won_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    log('INFO', 'Database schema initialized successfully');
+  } catch (err) {
+    logError('initializeDatabase', err);
+    throw err;
+  }
+}
+
 process.on('unhandledRejection', (reason, promise) => {
   log('ERROR', `Unhandled promise rejection: ${reason?.stack ?? reason}`);
 });
@@ -566,53 +655,10 @@ const client = new Client({
 
 const db = new Database('/data/bot.db');
 
-// Initialize tables
-// Force-drop and recreate the users table to fix a broken persistent schema
-// where an old copy of the table was missing the balance column. This is an
-// emergency fix: existing rows get reset to DEFAULT 0 balance, but user data
-// (gems) should live in a separate table going forward.
-db.exec(`
-  DROP TABLE IF EXISTS users;
+db.pragma("journal_mode = WAL");
 
-  CREATE TABLE IF NOT EXISTS users (
-    user_id TEXT PRIMARY KEY,
-    username TEXT,
-    balance INTEGER DEFAULT 0,
-    last_daily_claim TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    amount INTEGER,
-    reason TEXT,
-    timestamp TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS purchases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    item_id TEXT,
-    item_name TEXT,
-    price INTEGER,
-    timestamp TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS lottery_participants (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    username TEXT,
-    timestamp TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS giveaway_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    username TEXT,
-    giveaway_id TEXT,
-    timestamp TEXT
-  );
-`);
+// ✅ INITIALIZE DATABASE SCHEMA ON STARTUP
+initializeDatabase(db);
 
 initClanTables(db);
 initLotteryTable(db);
