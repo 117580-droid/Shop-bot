@@ -892,8 +892,6 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
         ],
       });
     }
-      });
-    }
     // ── !xp ────────────────────────────────────────────────────────────────────
     if (command === 'xp') {
       const target = message.mentions.users.first() || message.author;
