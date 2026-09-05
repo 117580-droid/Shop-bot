@@ -567,7 +567,13 @@ const client = new Client({
 const db = new Database('/data/bot.db');
 
 // Initialize tables
+// Force-drop and recreate the users table to fix a broken persistent schema
+// where an old copy of the table was missing the balance column. This is an
+// emergency fix: existing rows get reset to DEFAULT 0 balance, but user data
+// (gems) should live in a separate table going forward.
 db.exec(`
+  DROP TABLE IF EXISTS users;
+
   CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY,
     username TEXT,
