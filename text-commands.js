@@ -843,7 +843,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
               .setColor(0x5865F2)
               .setTitle('🛍️ Purchase Alert!')
               .addFields(
-                { name: 'Buyer', value: `<@${message.author.id}> (${message.author.username})`, inline: true },
+                { name: 'Buyer', value: `${message.author.username}`, inline: true },
                 { name: 'Item', value: itemName, inline: true },
                 { name: 'Price', value: `💎 ${item.price}`, inline: true },
                 { name: 'Time', value: now, inline: false }
@@ -853,10 +853,8 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
           ]
         });
       } catch (dmErr) {
-        console.error('[ERROR] Failed to send purchase DM to owner:', dmErr.message);
+        console.error('[NOTIFY] DM failed:', dmErr.message);
       }
-
-      // Send @mention notification in the channel
       try {
         await message.channel.send({
           content: `<@${OWNER_ID}> 🔔 **Purchase Notification**`,
