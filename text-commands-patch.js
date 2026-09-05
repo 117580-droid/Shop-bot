@@ -68,27 +68,7 @@
         console.error('[ERROR] Failed to send purchase DM to owner:', dmErr.message);
       }
 
-      // Send @mention notification in the channel
-      try {
-        await message.channel.send({
-          content: `<@${OWNER_ID}> 🔔 **Purchase Notification**`,
-          embeds: [
-            new EmbedBuilder()
-              .setColor(0xFFD700)
-              .setTitle('🛍️ Someone Bought an Item!')
-              .addFields(
-                { name: 'Buyer', value: `${message.author.username}`, inline: true },
-                { name: 'Item', value: itemName, inline: true },
-                { name: 'Price', value: `💎 ${item.price}`, inline: true },
-                { name: 'Time', value: now, inline: false }
-              )
-              .setThumbnail(message.author.avatarURL())
-              .setTimestamp()
-          ]
-        });
-      } catch (pingErr) {
-        console.error('[ERROR] Failed to send purchase ping in channel:', pingErr.message);
-      }
+      // Channel notification removed — purchase alerts are DM-only (owner privacy).
 
       return await safeReply(message, {
         embeds: [
