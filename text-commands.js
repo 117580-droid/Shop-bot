@@ -805,7 +805,7 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
 
       if (!itemName) {
         return await safeReply(message, {
-          content: '❌ Usage: `!redeem <item name>`\nExample: `!redeem Golden Sword`',
+          content: '❌ Usage: `!redeem <item name>`\\nExample: `!redeem Golden Sword`',
         });
       }
 
@@ -829,6 +829,49 @@ async function handleTextCommands(message, db, client, gameModule, alertBothUser
       const newBalance = balance - item.price;
       db.prepare('INSERT INTO users (user_id, username, balance) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET balance = ?')
         .run(message.author.id, message.author.username, newBalance, newBalance);
+
+      // ✅ NOTIFY OWNER (non-blocking)
+      (async () => {
+        try {
+          const OWNER_ID = process.env.OWNER_ID;
+          if (!OWNER_ID) return;
+          const now = new Date().toLocaleString();
+          try {
+            const owner = await client.users.fetch(OWNER_ID);
+            await owner.send({
+              embeds: [new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle('🛍️ Purchase Alert!')
+                .addFields(
+                  { name: 'Buyer', value: message.author.username, inline: true },
+                  { name: 'Item', value: itemName, inline: true },
+                  { name: 'Price', value: `💎 ${item.price}`, inline: true },
+                  { name: 'Time', value: now, inline: false }
+                )
+                .setThumbnail(message.author.avatarURL())
+                .setTimestamp()
+              ]
+            });
+          } catch (e) { console.error('[WARN] DM:', e.message); }
+          try {
+            await message.channel.send({
+              content: `<@${OWNER_ID}> 🔔`,
+              embeds: [new EmbedBuilder()
+                .setColor(0xFFD700)
+                .setTitle('🛍️ Purchased!')
+                .addFields(
+                  { name: 'Buyer', value: message.author.username, inline: true },
+                  { name: 'Item', value: itemName, inline: true },
+                  { name: 'Price', value: `💎 ${item.price}`, inline: true },
+                  { name: 'Time', value: now, inline: false }
+                )
+                .setThumbnail(message.author.avatarURL())
+                .setTimestamp()
+              ]
+            });
+          } catch (e) { console.error('[WARN] Channel:', e.message); }
+        } catch (err) { console.error('[WARN] Notify:', err.message); }
+      })();
 
       return await safeReply(message, {
         embeds: [
